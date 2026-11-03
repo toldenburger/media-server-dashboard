@@ -225,12 +225,33 @@ box(11.4, 1.0, 0.04, '#e9d9cc', 6.3, 0.62, -8.98); // wainscot in the break room
 box(11.4, 0.05, 0.08, '#d9c4b2', 6.3, 1.13, -8.96);
 
 // windows: frame, sill, mullions, a little sky
-const sky = canvasTexture(256, 256, (g, w, h) => {
+// The sky follows the real sun over your location. ?hour=21 previews another time of day.
+let LAT = 52.37, LON = 4.9;
+const nowDate = () => { const h = new URLSearchParams(location.search).get('hour'); const d = new Date(); if (h !== null) d.setHours(Math.floor(+h), (+h % 1) * 60, 0, 0); return d; };
+function sunAltitude(d = nowDate()) {
+  const rad = Math.PI / 180, day = (d - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86400000, b = 2 * Math.PI * (day - 81) / 364;
+  const decl = -23.44 * rad * Math.cos(2 * Math.PI / 365 * (day + 10)), eqt = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+  const ha = (d.getUTCHours() + d.getUTCMinutes() / 60 + LON / 15 + eqt / 60 - 12) * 15 * rad;
+  return Math.asin(Math.sin(LAT * rad) * Math.sin(decl) + Math.cos(LAT * rad) * Math.cos(decl) * Math.cos(ha)) / rad;
+}
+// [sun altitude, top colour, bottom colour]: night, dusk, golden hour, day
+const SKY_STOPS = [[-12, '#070b24', '#16224a'], [-4, '#2b2f66', '#c76f6b'], [3, '#6f7fc4', '#f6b27a'], [14, '#8cc6f2', '#dff0fb']];
+function skyColors(alt) {
+  const hi = SKY_STOPS.findIndex(([a]) => alt <= a);
+  if (hi <= 0) return hi === 0 ? [SKY_STOPS[0][1], SKY_STOPS[0][2]] : [SKY_STOPS[3][1], SKY_STOPS[3][2]];
+  const [a0, t0, b0] = SKY_STOPS[hi - 1], [a1, t1, b1] = SKY_STOPS[hi], k = (alt - a0) / (a1 - a0);
+  return [new THREE.Color(t0).lerp(new THREE.Color(t1), k).getStyle(), new THREE.Color(b0).lerp(new THREE.Color(b1), k).getStyle()];
+}
+const sky = canvasTexture(256, 256, (g, w, h, alt = sunAltitude()) => {
+  const [top, bottom] = skyColors(alt);
   const gr = g.createLinearGradient(0, 0, 0, h);
-  gr.addColorStop(0, '#8cc6f2'); gr.addColorStop(1, '#dff0fb');
+  gr.addColorStop(0, top); gr.addColorStop(1, bottom);
   g.fillStyle = gr; g.fillRect(0, 0, w, h);
-  g.fillStyle = 'rgba(255,255,255,.9)';
+  const dark = Math.min(1, Math.max(0, (3 - alt) / 12));  // 0 by day, 1 at night
+  g.fillStyle = `rgba(255,255,255,${0.9 - dark * 0.7})`;
   for (const [x, y, r] of [[60, 70, 22], [85, 62, 28], [112, 72, 20], [180, 150, 18], [200, 142, 24], [222, 152, 16]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+  g.fillStyle = `rgba(255,255,240,${dark})`;
+  for (const [x, y, r] of [[30, 30, 1.6], [150, 24, 1.2], [210, 60, 1.8], [90, 110, 1.2], [240, 120, 1.4], [20, 150, 1.2], [130, 190, 1.6], [60, 220, 1.2], [200, 210, 1.5]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
 });
 const skyMat = new THREE.MeshStandardMaterial({ map: sky, emissiveMap: sky, emissive: '#ffffff', emissiveIntensity: 0.55 });
 function windowAt(x) {
@@ -241,7 +262,8 @@ function windowAt(x) {
   box(0.06, 1.6, 0.06, frame, x, 2.05, -8.95); box(2.3, 0.05, 0.06, frame, x, 2.3, -8.95);
   rbox(2.7, 0.08, 0.32, 0.03, frame, x, 1.17, -8.85);
 }
-[1.7, 4.5, 10.2].forEach(windowAt);
+const WINDOWS = [1.7, 4.5, 10.2];
+WINDOWS.forEach(windowAt);
 
 
 // the "watching" board beside the fridge: a circle per person, green while they watch
@@ -1190,6 +1212,8 @@ function placeLabels() {
 // ---------- live data ----------
 let first = true;
 function render(d) {
+  latestData = d;
+  props.forEach((p) => p.update && p.update(d));
   d.services.forEach((svc, i) => {
     const p = people[svc.name] || (people[svc.name] = makePerson(svc.name, i % DESKS.length));
     const bad = svc.issues.some((a) => a.level === 'error');
@@ -1280,7 +1304,7 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   const r = renderer.domElement.getBoundingClientRect();
   pointer.set((e.clientX - r.left) / r.width * 2 - 1, 1 - (e.clientY - r.top) / r.height * 2);
   ray.setFromCamera(pointer, camera);
-  const hit = ray.intersectObjects([...Object.values(people).filter((p) => p.root.visible).map((p) => p.root), ...parcels.filter((b) => b.visible), ...wallPosters.map((p) => p.mesh), boardScreen], true)[0];
+  const hit = ray.intersectObjects([...Object.values(people).filter((p) => p.root.visible).map((p) => p.root), ...parcels.filter((b) => b.visible), ...wallPosters.map((p) => p.mesh), ...pickables, boardScreen], true)[0];
   if (hit && hit.object === boardScreen) {
     const px = hit.uv.x * BOARD_W, py = (1 - hit.uv.y) * BOARD_H, viewers = board.viewers || [];
     const i = boardCircles(viewers.length).findIndex(({ cx, cy, r }) => Math.hypot(px - cx, py - cy) <= r + 4);
@@ -1289,15 +1313,30 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     return v && v.watching ? showTip(`${v.name} is watching\n${v.title}`, e.clientX, e.clientY) : hideTip();
   }
   let o = hit && hit.object;
-  while (o && !o.userData.person && !parcels.includes(o) && !o.userData.poster) o = o.parent;
+  while (o && !o.userData.person && !parcels.includes(o) && !o.userData.poster && !o.userData.tip) o = o.parent;
   if (o && o.userData.poster === null) o = null;
   renderer.domElement.style.cursor = o ? 'pointer' : '';
   if (o && o.userData.person) showTip(doing(o.userData.person), e.clientX, e.clientY);
   else if (o && o.userData.poster) showTip(o.userData.poster, e.clientX, e.clientY);
+  else if (o && o.userData.tip) showTip(typeof o.userData.tip === 'function' ? o.userData.tip() : o.userData.tip, e.clientX, e.clientY);
   else if (o) showTip(queueText(latestSab), e.clientX, e.clientY);
   else hideTip();
 });
 renderer.domElement.addEventListener('pointerleave', hideTip);
+
+// ---------- props: one module per extra service, loaded from /office_props ----------
+const props = [], pickables = [];
+let latestData = null, skyAt = -99;
+const kit = {
+  THREE, scene, camera, add, mat, box, rbox, cyl, ball, capsule, torus, group, plane, canvasTexture, fitText,
+  windows: WINDOWS, sky, skyMat, sunAltitude, nowDate, pickables,
+  // hover text for a prop: a string, or a function giving one
+  tipOn(obj, tip) { obj.userData.tip = tip; if (!pickables.includes(obj)) pickables.push(obj); },
+};
+fetch('/office_props/index.json').then((r) => r.json()).then((names) => names.forEach((n) => import(`/office_props/${n}.js`).then((m) => {
+  const p = m.default(kit);
+  if (p) { props.push(p); if (latestData && p.update) p.update(latestData); }
+}).catch((e) => console.error('prop', n, e)))).catch(() => {});
 
 const clock = new THREE.Clock();
 function frame() {
@@ -1306,6 +1345,8 @@ function frame() {
   code.offset.y = (code.offset.y + dt * 0.08) % 1;
   rally(t);
   animateDataCenter(dt);
+  props.forEach((p) => p.frame && p.frame(dt, t));
+  if (t - skyAt > 30) { skyAt = t; const alt = sunAltitude(); sky.redraw(alt); skyMat.emissiveIntensity = 0.3 + 0.25 * Math.min(1, Math.max(0, (alt + 6) / 12)); }
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   if (hhmm !== clockFace.shown) { clockFace.shown = hhmm; clockFace.redraw(hhmm); }

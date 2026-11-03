@@ -10,6 +10,7 @@ it listens only on the addresses in config.json "bind" (default 127.0.0.1). API 
 """
 import hashlib
 import hmac
+import importlib.util
 import html
 import http.cookies
 import json
@@ -26,6 +27,7 @@ import urllib.parse
 import urllib.request
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,7 +72,7 @@ TICK = 2            # seconds between system samples
 KEEP = 150          # samples kept: 5 minutes
 
 history = {k: deque(maxlen=KEEP) for k in ("t", "cpu", "mem", "rx", "tx", "disk", "sab", "mcpu", "mmem")}
-state = {"system": {}, "services": [], "cinema": {"enabled": False, "profiles": [], "streams": [], "watched": [], "missing_drives": []}, "sab": {"ok": False}, "radarr": {"ok": False}, "sonarr": {"ok": False}, "prowlarr": {"ok": False}, "bazarr": {"ok": False}, "activity": {}, "network": {}, "disks": [], "med_health": [], "mediarium": {"ok": False}}
+state = {"system": {}, "services": [], "cinema": {"enabled": False, "profiles": [], "streams": [], "watched": [], "missing_drives": []}, "sab": {"ok": False}, "radarr": {"ok": False}, "sonarr": {"ok": False}, "prowlarr": {"ok": False}, "bazarr": {"ok": False}, "activity": {}, "network": {}, "disks": [], "med_health": [], "mediarium": {"ok": False}, "extra": {}}
 
 
 def sh(*args, timeout=5):
@@ -507,6 +509,59 @@ def payload():
     })
 
 
+# ---------- sources: one small module per extra service (see sources/README.md) ----------
+SOURCES = {}
+SECRETS_DIR = os.path.join(HERE, "secrets")  # one file per secret, mode 600, never committed
+
+
+def secret(name):
+    """A secret from secrets/<name>, or '' when it isn't there."""
+    if not re.fullmatch(r"[a-z0-9_]+", name):
+        return ""
+    try:
+        with open(os.path.join(SECRETS_DIR, name), encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def load_sources():
+    folder = os.path.join(HERE, "sources")
+    off = set(CONFIG.get("sources_off") or [])
+    for fn in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if not re.fullmatch(r"[a-z0-9_]+\.py", fn) or fn[:-3] in off:
+            continue
+        spec = importlib.util.spec_from_file_location("source_" + fn[:-3], os.path.join(folder, fn))
+        mod = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(mod)
+        except Exception as e:  # a broken source must not stop the dashboard
+            print(f"source {fn}: {type(e).__name__}: {e}", flush=True)
+            continue
+        mod.ctx = SimpleNamespace(config=(CONFIG.get("sources") or {}).get(mod.NAME, {}), get_json=get_json, secret=secret, sh=sh, proc=proc, state=state)
+        SOURCES[mod.NAME] = mod
+
+
+def run_source(mod):
+    try:
+        state["extra"][mod.NAME] = mod.poll(mod.ctx)
+    except Exception as e:
+        print(f"source {mod.NAME}: {type(e).__name__}: {e}", flush=True)
+        state["extra"][mod.NAME] = {"ok": False}
+
+
+def source_loop(mod):
+    while True:
+        run_source(mod)
+        time.sleep(mod.EVERY)
+
+
+def start_sources():
+    load_sources()
+    for mod in SOURCES.values():
+        threading.Thread(target=source_loop, args=(mod,), daemon=True).start()
+
+
 # ---------- login ----------
 failures = {}  # ip -> [attempts, locked until]
 
@@ -566,6 +621,29 @@ class Handler(BaseHTTPRequestHandler):
             return self.page("index.html" if path == "/" else "office.html") if self.authed() else self.redirect("/login")
         if path == "/poster":
             return self.poster() if self.authed() else self.reply(401, b"Login needed", "text/plain")
+        if path.startswith("/media/"):
+            if not self.authed():
+                return self.reply(401, b"Login needed", "text/plain")
+            _, _, src, name = (path.split("/", 3) + ["", ""])[:4]
+            mod = SOURCES.get(src)
+            try:
+                got = mod.media(mod.ctx, name, urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)) if mod and hasattr(mod, "media") else None
+            except Exception as e:
+                print(f"media {src}: {type(e).__name__}", flush=True)
+                got = None
+            return self.reply(200, got[0], got[1]) if got else self.reply(404, b"Not found", "text/plain")
+        if path.startswith("/office_props/"):
+            if not self.authed():
+                return self.reply(401, b"Login needed", "text/plain")
+            folder = os.path.join(HERE, "office_props")
+            name = path[len("/office_props/"):]
+            if name == "index.json":
+                names = sorted(f[:-3] for f in os.listdir(folder) if re.fullmatch(r"[a-z0-9_]+\.js", f)) if os.path.isdir(folder) else []
+                return self.reply(200, json.dumps(names).encode(), "application/json")
+            if re.fullmatch(r"[a-z0-9_]+\.js", name) and os.path.isfile(os.path.join(folder, name)):
+                with open(os.path.join(folder, name), "rb") as f:
+                    return self.reply(200, f.read(), "text/javascript; charset=utf-8")
+            return self.reply(404, b"Not found", "text/plain")
         if path in VENDOR:
             if not self.authed():
                 return self.reply(401, b"Login needed", "text/plain")
@@ -643,6 +721,7 @@ if __name__ == "__main__":
         read_static()
         threading.Thread(target=system_loop, daemon=True).start()
         load_totals()
+        start_sources()
         looped(5, read_mediarium)
         looped(10, read_container)
         looped(30, read_disks)
