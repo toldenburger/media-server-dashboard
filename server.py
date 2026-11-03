@@ -1,9 +1,9 @@
 #!/usr/bin/python3
-"""Media server dashboard and 3D office for a Mac. Standard library only.
+"""Media server dashboard and 3D office, ported from macOS to Linux. Standard library only.
 
 Watches the machine and the apps on it strictly from the outside: system tools and each app's own API
-(Radarr, Sonarr, Prowlarr, Bazarr, SABnzbd). Other devices on the network need the password in password.txt;
-this Mac itself doesn't. API keys stay in here; only the fields picked out below reach the browser.
+(Mediarium: movies, TV, downloads, subtitles, indexers). Everyone needs the password in password.txt, localhost included;
+it listens only on the addresses in config.json "bind" (default 127.0.0.1). API keys stay in here; only the fields picked out below reach the browser.
 
     python3 server.py          watch this Mac
     python3 server.py --demo   made-up data, for trying it out or taking screenshots
@@ -43,33 +43,34 @@ def _settings():
 
 
 CONFIG = _settings()
-where = lambda key, default: os.path.expanduser(CONFIG.get(key) or default)
 PORT = int(CONFIG.get("port") or 8900)
+BIND = CONFIG.get("bind") or ["127.0.0.1"]  # addresses to listen on; use the Tailscale IP for tailnet-only access
 TITLE = CONFIG.get("title") or "Media Server Dashboard"
-# The usual places each app keeps its settings on a Mac; config.json can point somewhere else.
-RADARR_XML = where("radarr_config", "~/Library/Application Support/Radarr/config.xml")
-SONARR_XML = where("sonarr_config", "~/.config/Sonarr/config.xml")
-PROWLARR_XML = where("prowlarr_config", "~/Library/Application Support/Prowlarr/config.xml")
-BAZARR_YAML = where("bazarr_config", "/Applications/bazarr/data/config/config.yaml")
-SAB_INI = where("sabnzbd_config", "~/Library/Application Support/SABnzbd/sabnzbd.ini")
-# Home Cinema is the author's own player; leave this out of config.json and that part simply stays hidden.
-CINEMA = os.path.expanduser(CONFIG["home_cinema_dir"]) if CONFIG.get("home_cinema_dir") else None
+MEDIARIUM_URL = (CONFIG.get("mediarium_url") or "http://127.0.0.1:8264").rstrip("/")
+MEDIARIUM_KEY_FILE = os.path.expanduser(CONFIG.get("mediarium_key_file") or os.path.join(HERE, "mediarium_api_key"))  # API key, one line, mode 600
+MEDIARIUM_CONTAINER = CONFIG.get("mediarium_container") or "mediarium"
 
 PASSWORD_FILE = os.path.join(HERE, "password.txt")  # change it any time; it applies straight away and signs everyone out
 SECRET_FILE = os.path.join(HERE, ".secret")
 VENDOR = {"/vendor/three.module.min.js": "three.module.min.js", "/vendor/OrbitControls.js": "OrbitControls.js", "/vendor/RoundedBoxGeometry.js": "RoundedBoxGeometry.js"}  # the 3D office's library, served as-is
 POSTER_HOSTS = ("https://image.tmdb.org/", "https://artworks.thetvdb.com/")
 poster_cache = {}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # a poster host must not be able to bounce us to another host
+        return None
+
+
+NO_REDIRECT = urllib.request.build_opener(_NoRedirect)
 MAX_ATTEMPTS = 8
 LOCKOUT = 5 * 60
 
 TICK = 2            # seconds between system samples
 KEEP = 150          # samples kept: 5 minutes
-VIDEO = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".mpg", ".ts", ".wmv")
-WATCHING_WINDOW = 90 * 1000  # Home Cinema saves progress while playing, so a save this recent means it is on now
 
-history = {k: deque(maxlen=KEEP) for k in ("t", "cpu", "mem", "rx", "tx", "disk", "sab")}
-state = {"system": {}, "services": [], "cinema": {}, "sab": {"ok": False}, "radarr": {"ok": False}, "sonarr": {"ok": False}, "prowlarr": {"ok": False}, "bazarr": {"ok": False}, "activity": {}, "network": {}, "disks": []}
+history = {k: deque(maxlen=KEEP) for k in ("t", "cpu", "mem", "rx", "tx", "disk", "sab", "mcpu", "mmem")}
+state = {"system": {}, "services": [], "cinema": {"enabled": False, "profiles": [], "streams": [], "watched": [], "missing_drives": []}, "sab": {"ok": False}, "radarr": {"ok": False}, "sonarr": {"ok": False}, "prowlarr": {"ok": False}, "bazarr": {"ok": False}, "activity": {}, "network": {}, "disks": [], "med_health": [], "mediarium": {"ok": False}}
 
 
 def sh(*args, timeout=5):
@@ -77,10 +78,6 @@ def sh(*args, timeout=5):
         return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout).stdout
     except (subprocess.SubprocessError, OSError):
         return ""
-
-
-def sysctl(name):
-    return sh("/usr/sbin/sysctl", "-n", name).strip()
 
 
 def get_json(url, headers=None, timeout=6):
@@ -96,49 +93,29 @@ def read_json(path):
         return None
 
 
-def arr_config(path):
-    try:
-        with open(path, encoding="utf-8") as f:
-            xml = f.read()
-    except OSError:
-        return None
-    tag = lambda n: (re.search(f"<{n}>(.*?)</{n}>", xml) or [None, ""])[1]
-    return {"port": int(tag("Port") or 0), "key": tag("ApiKey"), "base": tag("UrlBase")}
-
-
-def bazarr_config():
-    try:
-        with open(BAZARR_YAML, encoding="utf-8") as f:
-            txt = f.read()
-    except OSError:
-        return None
-    def val(section, name):
-        body = (re.search(rf"^{section}:\n(.*?)(?=^\S|\Z)", txt, re.M | re.S) or [None, ""])[1]
-        return (re.search(rf"^\s+{name}: *(.*)$", body, re.M) or [None, ""])[1].strip().strip("'\"")
-    return {"port": int(val("general", "port") or 6767), "key": val("auth", "apikey"), "base": val("general", "base_url").rstrip("/")}
-
-
-def sab_config():
-    try:
-        with open(SAB_INI, encoding="utf-8") as f:
-            txt = f.read()
-    except OSError:
-        return None
-    val = lambda n: (re.search(rf"^{n} *= *(.*)$", txt, re.M) or [None, ""])[1].strip().strip('"')
-    return {"port": int(val("port") or 8080), "key": val("api_key"), "base": val("url_base").rstrip("/")}
-
-
 # ---------- the machine, every couple of seconds ----------
 net_last = {}
+cpu_last = {}
+disk_last = {}
+NET_IFACE = re.compile(r"(en|eth|wl)\w*")  # physical NICs only, not lo, docker, veth, tailscale
+
+
+def proc(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
 
 
 def sample_network():
     rx = tx = 0
-    for line in sh("/usr/sbin/netstat", "-ibn").splitlines():
-        p = line.split()
-        if len(p) >= 10 and re.fullmatch(r"en\d+\*?", p[0]) and p[2].startswith("<Link#"):
-            rx += int(p[-5])
-            tx += int(p[-2])
+    for line in proc("/proc/net/dev").splitlines()[2:]:
+        name, _, data = line.partition(":")
+        p = data.split()
+        if NET_IFACE.fullmatch(name.strip()) and len(p) >= 9:
+            rx += int(p[0])
+            tx += int(p[8])
     now = time.time()
     rates = (0, 0)
     if net_last and now > net_last["t"]:
@@ -149,28 +126,51 @@ def sample_network():
 
 
 def sample_memory():
-    out = sh("/usr/bin/vm_stat")
-    size = int((re.search(r"page size of (\d+)", out) or [0, 4096])[1])
-    pages = lambda n: int((re.search(n + r":\s+(\d+)", out) or [0, 0])[1])
-    total = int(sysctl("hw.memsize") or 1)
-    used = (pages("Pages active") + pages("Pages wired down") + pages("Pages occupied by compressor")) * size
-    swap = re.search(r"total = ([\d.]+)M\s+used = ([\d.]+)M", sysctl("vm.swapusage"))
+    info = {k: int(v.split()[0]) * 1024 for k, _, v in (ln.partition(":") for ln in proc("/proc/meminfo").splitlines()) if v.strip()}
+    total = info.get("MemTotal", 1)
+    avail = info.get("MemAvailable", total)
     return {
-        "total": total, "used": used,
-        "free_level": int(sysctl("kern.memorystatus_level") or 100),
-        "swap_total": float(swap[1]) * 1048576 if swap else 0,
-        "swap_used": float(swap[2]) * 1048576 if swap else 0,
+        "total": total, "used": total - avail,
+        "free_level": round(avail / total * 100),
+        "swap_total": info.get("SwapTotal", 0), "swap_used": info.get("SwapTotal", 0) - info.get("SwapFree", 0),
     }
+
+
+def sample_cpu():
+    """User, system and idle percent since the last call, from /proc/stat."""
+    v = [int(x) for x in proc("/proc/stat").splitlines()[0].split()[1:9]]  # user nice system idle iowait irq softirq steal
+    user, system, idle = v[0] + v[1], v[2] + v[5] + v[6], v[3] + v[4]
+    total = user + system + idle + v[7]
+    prev = cpu_last.copy()
+    cpu_last.update(user=user, system=system, idle=idle, total=total)
+    if not prev or total <= prev["total"]:
+        return None
+    d = total - prev["total"]
+    return (user - prev["user"]) / d * 100, (system - prev["system"]) / d * 100, (idle - prev["idle"]) / d * 100
+
+
+def sample_disk_bytes_per_sec():
+    sectors = 0
+    for ln in proc("/proc/diskstats").splitlines():
+        p = ln.split()
+        if len(p) >= 10 and re.fullmatch(r"sd[a-z]+|nvme\d+n\d+|mmcblk\d+", p[2]):
+            sectors += int(p[5]) + int(p[9])
+    now = time.time()
+    rate = 0
+    if disk_last and now > disk_last["t"]:
+        rate = max(0, sectors - disk_last["s"]) * 512 / (now - disk_last["t"])
+    disk_last.update(t=now, s=sectors)
+    return rate
 
 
 def system_loop():
     while True:
         started = time.time()
-        # A one second iostat run gives CPU, disk speed and load in one go. Its last line is the live one.
-        last = [ln.split() for ln in sh("/usr/sbin/iostat", "-n", "1", "-w", "1", "-c", "2").splitlines() if re.match(r"\s*[\d.]+\s", ln)]
-        if last and len(last[-1]) >= 9:
-            v = [float(x) for x in last[-1][-9:]]
-            disk_mb, us, sy, idle, l1, l5, l15 = v[2], v[3], v[4], v[5], v[6], v[7], v[8]
+        cpu = sample_cpu()
+        disk = sample_disk_bytes_per_sec()
+        if cpu:
+            us, sy, idle = cpu
+            load = [float(x) for x in proc("/proc/loadavg").split()[:3]]
             mem = sample_memory()
             rx, tx = sample_network()
             history["t"].append(int(time.time() * 1000))
@@ -178,9 +178,11 @@ def system_loop():
             history["mem"].append(round(mem["used"] / mem["total"] * 100, 1))
             history["rx"].append(round(rx))
             history["tx"].append(round(tx))
-            history["disk"].append(disk_mb * 1048576)
+            history["disk"].append(disk)
             history["sab"].append(state["sab"].get("speed", 0))
-            state["system"].update(cpu={"user": us, "system": sy, "idle": idle}, load=[l1, l5, l15], memory=mem)
+            history["mcpu"].append(state["mediarium"].get("cpu", 0))
+            history["mmem"].append(state["mediarium"].get("mem", 0))
+            state["system"].update(cpu={"user": us, "system": sy, "idle": idle}, load=load, memory=mem)
         time.sleep(max(0.1, TICK - (time.time() - started)))
 
 
@@ -196,336 +198,78 @@ def looped(every, fn):
 
 
 def read_static():
-    boot = re.search(r"sec = (\d+)", sysctl("kern.boottime"))
+    cpu_name = next((ln.partition(":")[2].strip() for ln in proc("/proc/cpuinfo").splitlines() if ln.startswith("model name")), "")
+    os_name = next((ln.partition("=")[2].strip().strip('"') for ln in proc("/etc/os-release").splitlines() if ln.startswith("PRETTY_NAME=")), "Linux")
+    uptime = float((proc("/proc/uptime").split() or ["0"])[0])
     state["system"].update(
-        host=socket.gethostname().replace(".local", ""),
-        cpu_name=sysctl("machdep.cpu.brand_string"), cores=int(sysctl("hw.logicalcpu") or 1),
-        macos=sh("/usr/bin/sw_vers", "-productVersion").strip(), model=sysctl("hw.model"),
-        booted=int(boot[1]) * 1000 if boot else None,
+        host=socket.gethostname().split(".")[0],
+        cpu_name=cpu_name, cores=os.cpu_count() or 1,
+        macos=os_name, model=proc("/sys/class/dmi/id/product_name").strip(),
+        booted=int((time.time() - uptime) * 1000),
     )
 
 
 def read_disks():
     disks = {}
-    for ln in sh("/bin/df", "-kl").splitlines()[1:]:
-        m = re.match(r"(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+\d+%.*?\d+%\s+(/.*)$", ln)
-        if not m or int(m[2]) < 1048576:  # skips mounted installers and the like
+    for ln in sh("/bin/df", "-kl", "--output=size,avail,target").splitlines()[1:]:
+        m = re.match(r"\s*(\d+)\s+(\d+)\s+(/.*)$", ln)
+        if not m or int(m[1]) < 1048576:
             continue
-        mount = m[5]
-        if mount == "/System/Volumes/Data":
-            name = "Macintosh HD"
-        elif mount.startswith("/Volumes/"):
-            name = mount[9:]
+        mount = m[3]
+        if mount == "/":
+            name = "System"
+        elif mount.startswith("/run/media/"):
+            name = mount.split("/")[-1]
         else:
             continue
-        disks[name] = {"name": name, "total": int(m[2]) * 1024, "free": int(m[4]) * 1024}
+        disks[name] = {"name": name, "total": int(m[1]) * 1024, "free": int(m[2]) * 1024}
     state["disks"] = list(disks.values())
 
 
 def read_network():
-    route = sh("/sbin/route", "-n", "get", "default")
-    iface = (re.search(r"interface: (\S+)", route) or [None, ""])[1]
-    lan = ""
-    for i in ("en0", "en1", "en2"):
-        lan = sh("/usr/sbin/ipconfig", "getifaddr", i).strip()
-        if lan:
-            break
-    ping = sh("/sbin/ping", "-c", "1", "-t", "2", "1.1.1.1", timeout=4)
+    route = sh("/usr/bin/ip", "-4", "route", "get", "1.1.1.1")
+    iface = (re.search(r"dev (\S+)", route) or [None, ""])[1]
+    lan = (re.search(r"src (\S+)", route) or [None, ""])[1]
+    ping = sh("/usr/bin/ping", "-c", "1", "-W", "2", "1.1.1.1", timeout=4)
     ms = re.search(r"time=([\d.]+)", ping)
-    state["network"] = {"lan": lan, "vpn": iface.startswith("utun"), "online": bool(ms), "ping": float(ms[1]) if ms else None}
-    speed = re.search(r"CPU_Speed_Limit\s*=\s*(\d+)", sh("/usr/bin/pmset", "-g", "therm"))
-    state["system"]["speed_limit"] = int(speed[1]) if speed else 100
+    state["network"] = {"lan": lan, "vpn": iface.startswith(("tailscale", "wg", "tun")), "online": bool(ms), "ping": float(ms[1]) if ms else None}
+    state["system"]["speed_limit"] = 100  # macOS reported thermal throttling here; not read on Linux
 
 
 # ---------- apps ----------
-def cinema_config():
-    return (read_json(os.path.join(CINEMA, "config.json")) or {}) if CINEMA else {}
+# ---------- Mediarium: one app, shown as five office workers ----------
+# Each worker is a role Mediarium plays. Keys are the names the pages use for the data (kept from the original arr layout).
+KEYS = {"Movies": "radarr", "TV": "sonarr", "Indexers": "prowlarr", "Subtitles": "bazarr", "Downloads": "sab"}
+STATS_FILE = os.path.join(HERE, "stats.json")
+med = {"at": {}, "data": {}}
+dl_last = {}      # queue id -> bytes done at the last reading, to work out the speed
+dl_totals = {"days": {}}
+download_titles = {}  # queue id -> the movie or episode it is
+download_owner = {}   # queue id -> "Movies", "TV" or "Downloads"
 
 
-def read_services():
-    """Is each app listening on its port?"""
-    wanted = {"Home Cinema": cinema_config().get("port", 8765)} if CINEMA else {}
-    for name, c in (("Radarr", arr_config(RADARR_XML)), ("Sonarr", arr_config(SONARR_XML)), ("Bazarr", bazarr_config()), ("Prowlarr", arr_config(PROWLARR_XML))):
-        if c:
-            wanted[name] = c["port"]
-    sab = sab_config()
-    if sab:
-        wanted["SABnzbd"] = sab["port"]
-    listening = {int(p) for p in re.findall(r":(\d+) \(LISTEN\)", sh("/usr/sbin/lsof", "-nP", "-iTCP", "-sTCP:LISTEN"))}
-    state["services"] = [{"name": n, "up": port in listening} for n, port in wanted.items()]
+def mget(path):
+    with open(MEDIARIUM_KEY_FILE, encoding="utf-8") as f:
+        key = f.read().strip()
+    return get_json(MEDIARIUM_URL + path, {"X-API-Key": key}, timeout=10)
 
 
-def titles():
-    """Home Cinema ids to names: its library cache has everything on connected drives, its poster cache has the rest."""
-    known = {}
-    if not CINEMA:
-        return known, {}
-    meta = read_json(os.path.join(CINEMA, "data/metadata.json")) or {}
-    for k, v in meta.items():
-        if isinstance(v, dict) and v.get("title"):
-            known[k] = {"title": v["title"], "year": v.get("year")}
-    lib = read_json(os.path.join(CINEMA, "data/library-cache.json")) or {}
-    files = {}
-    for m in lib.get("movies", []):
-        known[m["id"]] = {"title": m["title"], "year": m.get("year")}
-        for p in m.get("parts", []):
-            files[p.get("file")] = known[m["id"]]
-    for s in lib.get("shows", []):
-        for e in s.get("episodes", []):
-            label = f"{s['title']} S{e.get('season', 0):02d}E{e.get('episode') or 0:02d}"
-            known[e["id"]] = {"title": label, "year": None}
-            files[e.get("file")] = known[e["id"]]
-    return known, files
+def cached(path, ttl):
+    if path not in med["at"] or time.time() - med["at"][path] > ttl:
+        med["data"][path] = mget(path)
+        med["at"][path] = time.time()
+    return med["data"][path]
 
 
-def read_cinema():
-    if not CINEMA:
-        state["cinema"] = {"enabled": False, "profiles": [], "streams": [], "watched": [], "missing_drives": []}
-        return
-    cfg = cinema_config()
-    port = cfg.get("port", 8765)
-    known, files = titles()
-
-    now = time.time() * 1000
-    watched = []
-    for prof in cfg.get("profiles", []):
-        pid = re.sub(r"[^a-z0-9]+", "-", str(prof.get("id") or prof.get("name")).lower())
-        for key, v in (read_json(os.path.join(CINEMA, f"data/progress-{pid}.json")) or {}).items():
-            if not isinstance(v, dict) or not v.get("updated"):
-                continue
-            t = known.get(key)
-            if not t:
-                continue
-            watched.append({"who": prof.get("name"), "title": t["title"], "year": t["year"], "pct": round(v.get("pct", 0) * 100), "when": v["updated"], "now": now - v["updated"] < WATCHING_WINDOW})
-    watched.sort(key=lambda x: -x["when"])
-
-    # Which video files the server and its ffmpeg have open.
-    listener = sh("/usr/sbin/lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t").split()
-    ffmpeg = sh("/usr/bin/pgrep", "-f", os.path.join(CINEMA, "ffmpeg/bin/ffmpeg")).split()
-    # Other services (Bazarr) borrow Home Cinema's ffmpeg; name them by the program that started the ffmpeg.
-    service = {}
-    for pid in ffmpeg:
-        parent = sh("/bin/ps", "-o", "command=", "-p", sh("/bin/ps", "-o", "ppid=", "-p", pid).strip())
-        if "bazarr" in parent.lower():
-            service[pid] = "Bazarr"
-    open_files = {}
-    if listener or ffmpeg:
-        pid = None
-        for ln in sh("/usr/sbin/lsof", "-nP", "-Fpn", "-p", ",".join(listener + ffmpeg)).splitlines():
-            if ln.startswith("p"):
-                pid = ln[1:]
-            elif ln.startswith("n") and ln.lower().endswith(VIDEO):
-                open_files.setdefault(ln[1:], service.get(pid))
-    # Progress saves say who is watching; an open file with no recent save is on, but by someone unknown.
-    streams = [{"title": w["title"], "who": w["who"], "pct": w["pct"]} for w in watched if w["now"]]
-    for title, svc in sorted({(files.get(f) or {"title": os.path.basename(f)})["title"]: s for f, s in open_files.items()}.items()):
-        if not any(st["title"] == title for st in streams):
-            streams.append({"title": title, "service": svc})
-
-    try:
-        status = get_json(f"http://127.0.0.1:{port}/api/status", timeout=3)
-    except (OSError, ValueError):
-        status = {}
-
-    missing = []
-    for path in cfg.get("movieDirs", []) + cfg.get("showDirs", []):
-        m = re.match(r"/Volumes/([^/]+)", path)
-        if m and not os.path.isdir(path) and m[1] not in missing:
-            missing.append(m[1])
-
-    state["cinema"] = {"enabled": True, "ok": bool(status), "converting": len(ffmpeg), "profiles": [p.get("name") for p in cfg.get("profiles", [])], "streams": streams, "watched": watched[:5], "missing_drives": missing}
-
-
-def poster(item):
-    for img in item.get("images", []):
-        if img.get("coverType") == "poster" and str(img.get("remoteUrl", "")).startswith("https://"):
-            return img["remoteUrl"]
-    return None
-
-
-arr_slow = {}
-
-
-def read_arr(kind, path):
-    c = arr_config(path)
-    if not c:
-        return
-    movies = kind == "radarr"
-    def get(p):
-        return get_json(f"http://127.0.0.1:{c['port']}{c['base']}/api/v3/{p}", {"X-Api-Key": c["key"]})
-    include = "includeMovie=true" if movies else "includeSeries=true&includeEpisode=true"
-    try:
-        slow = arr_slow.get(kind)
-        if not slow or time.time() - slow["at"] > 60:
-            start = datetime.now(timezone.utc)
-            end = start + timedelta(days=14)
-            fmt = "%Y-%m-%dT%H:%M:%SZ"
-            slow = {
-                "at": time.time(), "status": get("system/status"), "health": get("health"), "roots": get("rootfolder"),
-                "missing": get("wanted/missing?pageSize=1"),
-                "items": get("movie" if movies else "series"),
-                "history": get(f"history?pageSize=8&eventType=3&sortKey=date&sortDirection=descending&{include}"),
-                "calendar": get(f"calendar?start={start.strftime(fmt)}&end={end.strftime(fmt)}" + ("" if movies else "&includeSeries=true")),
-            }
-            arr_slow[kind] = slow
-    except (OSError, ValueError, urllib.error.URLError):
-        state[kind] = {"ok": False}
-        arr_slow.pop(kind, None)
-        return
-
-    ep = lambda e: f"S{e.get('seasonNumber', 0):02d}E{e.get('episodeNumber', 0):02d}"
-
-    items = slow["items"]
-    if movies:
-        have = [m for m in items if m.get("hasFile")]
-        have.sort(key=lambda m: (m.get("movieFile") or {}).get("dateAdded") or m.get("added") or "", reverse=True)
-        recent = [{
-            "title": m.get("title"), "year": m.get("year"), "poster": poster(m), "size": m.get("sizeOnDisk", 0),
-            "quality": ((m.get("movieFile") or {}).get("quality") or {}).get("quality", {}).get("name"),
-            "when": (m.get("movieFile") or {}).get("dateAdded") or m.get("added"),
-        } for m in have[:8]]
-        library = {"total": len(items), "have": len(have), "size": sum(m.get("sizeOnDisk", 0) for m in items)}
-    else:
-        stat = lambda s, k: (s.get("statistics") or {}).get(k, 0)
-        recent = [{
-            "title": (h.get("series") or {}).get("title") or h.get("sourceTitle"),
-            "sub": ep(h["episode"]) + " " + h["episode"].get("title", "") if h.get("episode") else "",
-            "poster": poster(h.get("series") or {}),
-            "quality": ((h.get("quality") or {}).get("quality") or {}).get("name"), "when": h.get("date"),
-        } for h in slow["history"].get("records", [])]
-        library = {"total": len(items), "have": sum(stat(s, "episodeFileCount") for s in items), "episodes": sum(stat(s, "episodeCount") for s in items), "size": sum(stat(s, "sizeOnDisk") for s in items)}
-
-    upcoming = []
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    for c2 in slow["calendar"]:
-        if c2.get("hasFile"):
-            continue
-        if movies:
-            when = next((d for d in (c2.get("digitalRelease"), c2.get("physicalRelease"), c2.get("inCinemas")) if d and d >= now), None)
-            if when:
-                upcoming.append({"kind": "Movie", "title": c2.get("title"), "when": when})
-        elif c2.get("airDateUtc"):
-            upcoming.append({"kind": "Episode", "title": f"{(c2.get('series') or {}).get('title', '')} {ep(c2)}".strip(), "when": c2["airDateUtc"]})
-
-    state[kind] = {
-        "ok": True, "version": slow["status"].get("version"), "library": library, "missing": slow["missing"].get("totalRecords", 0),
-        "recent": recent, "upcoming": upcoming,
-        "health": [{"level": h.get("type"), "message": h.get("message")} for h in slow["health"]],
-        "roots": [{"path": r.get("path"), "ok": r.get("accessible", True)} for r in slow["roots"]],
-    }
-
-
-def read_radarr():
-    read_arr("radarr", RADARR_XML)
-
-
-def read_sonarr():
-    read_arr("sonarr", SONARR_XML)
-
-
-def read_prowlarr():
-    c = arr_config(PROWLARR_XML)
-    if not c:
-        return
-    def get(p):
-        return get_json(f"http://127.0.0.1:{c['port']}{c['base']}/api/v1/{p}", {"X-Api-Key": c["key"]})
-    try:
-        indexers = get("indexer")
-        state["prowlarr"] = {
-            "ok": True, "version": get("system/status").get("version"), "indexers": len(indexers),
-            "enabled": sum(1 for i in indexers if i.get("enable")),
-            "health": [{"level": h.get("type"), "message": h.get("message")} for h in get("health")],
-        }
-    except (OSError, ValueError, urllib.error.URLError):
-        state["prowlarr"] = {"ok": False}
-
-
-def read_bazarr():
-    c = bazarr_config()
-    if not c:
-        return
-    try:
-        health = get_json(f"http://127.0.0.1:{c['port']}{c['base']}/api/system/health", {"X-API-KEY": c["key"]})["data"]
-        state["bazarr"] = {"ok": True, "health": [{"level": "warning", "message": f"{h.get('object')}: {h.get('issue')}"} for h in health]}
-    except (OSError, ValueError, KeyError, urllib.error.URLError):
-        state["bazarr"] = {"ok": False}
+def hb(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
 
 
 def utc_ms(text):
     return datetime.strptime(text[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp() * 1000
-
-
-download_titles = {}  # SABnzbd download id -> the movie or episode it is, from Radarr and Sonarr
-download_owner = {}  # SABnzbd download id -> "Radarr" or "Sonarr"
-
-
-def read_activity():
-    """What Radarr, Sonarr, Prowlarr and Bazarr are busy with right now, for the office."""
-    act, titles, owner = {}, {}, {}
-    for name, path, v in (("Radarr", RADARR_XML, "v3"), ("Sonarr", SONARR_XML, "v3"), ("Prowlarr", PROWLARR_XML, "v1")):
-        c = arr_config(path)
-        if not c:
-            continue
-        def get(p):
-            return get_json(f"http://127.0.0.1:{c['port']}{c['base']}/api/{v}/{p}", {"X-Api-Key": c["key"]})
-        try:
-            jobs = [x.get("commandName") or x.get("name") for x in get("command") if x.get("status") in ("started", "queued")]
-            if name == "Prowlarr":
-                last = (get("history?pageSize=1&sortKey=date&sortDirection=descending").get("records") or [None])[0]
-                if not jobs and last and time.time() * 1000 - utc_ms(last["date"]) < 90 * 1000:
-                    query = (last.get("data") or {}).get("query")
-                    jobs = [f"Searching for {query}" if query else "Checking RSS feeds"]
-            else:
-                # Their queue says which movie or episode each download is, so SABnzbd's file names can be shown properly.
-                q = get("queue?pageSize=500&" + ("includeMovie=true" if name == "Radarr" else "includeSeries=true&includeEpisode=true"))
-                for r in q.get("records", []):
-                    if r.get("downloadId"):
-                        titles[r["downloadId"].lower()] = nice_title(r, name == "Radarr")
-                        owner[r["downloadId"].lower()] = name
-                waiting = q.get("totalRecords", 0)
-                if waiting and not jobs:
-                    jobs = [f"Waiting on {waiting} download{'s' if waiting > 1 else ''}"]
-        except (OSError, ValueError, KeyError, urllib.error.URLError):
-            continue
-        act[name] = jobs[0] if jobs else None
-    b = bazarr_config()
-    if b:
-        try:
-            tasks = get_json(f"http://127.0.0.1:{b['port']}{b['base']}/api/system/tasks", {"X-API-KEY": b["key"]})["data"]
-            act["Bazarr"] = next((t["name"] for t in tasks if t.get("job_running")), None)
-        except (OSError, ValueError, KeyError, urllib.error.URLError):
-            pass
-    state["activity"] = act
-    download_titles.clear()
-    download_titles.update(titles)
-    download_owner.clear()
-    download_owner.update(owner)
-
-
-def up_next(name, n=5):
-    """The next downloads in SABnzbd's order, for the popup on a service box. Radarr and Sonarr get only their own."""
-    if name not in ("SABnzbd", "Radarr", "Sonarr"):
-        return []
-    sab = state["sab"]
-    out = []
-    for s in sab.get("queue", []) if sab.get("ok") else []:
-        sid = (s.get("id") or "").lower()
-        if name != "SABnzbd" and download_owner.get(sid) != name:
-            continue
-        out.append({"title": download_titles.get(sid) or tidy(s["title"]), "pct": round(s["pct"]), "size": s.get("size")})
-        if len(out) == n:
-            break
-    return out
-
-
-def nice_title(r, movie):
-    if movie:
-        m = r.get("movie") or {}
-        return f"{m['title']} ({m['year']})" if m.get("title") and m.get("year") else m.get("title") or tidy(r.get("title", ""))
-    series, ep = r.get("series") or {}, r.get("episode") or {}
-    if series.get("title") and ep:
-        return f"{series['title']} S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}"
-    return tidy(r.get("title", ""))
 
 
 def tidy(name):
@@ -538,48 +282,181 @@ def tidy(name):
     return f"{year[1].strip()} ({year[2]})" if year else n
 
 
+def load_totals():
+    dl_totals["days"] = (read_json(STATS_FILE) or {}).get("days", {})
+
+
+def save_totals():
+    try:
+        with open(STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump({"days": dl_totals["days"]}, f)
+    except OSError:
+        pass
+
+
+def track_totals(delta):
+    today = datetime.now().strftime("%Y-%m-%d")
+    days = dl_totals["days"]
+    days[today] = days.get(today, 0) + delta
+    for old in sorted(days)[:-400]:
+        del days[old]
+    cut = lambda n: (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
+    return {"day": days.get(today, 0), "week": sum(v for k, v in days.items() if k > cut(7)), "month": sum(v for k, v in days.items() if k > cut(30)), "total": sum(days.values())}
+
+
+def all_down():
+    for key in KEYS.values():
+        state[key] = {"ok": False}
+    state["services"] = [{"name": n, "up": False} for n in KEYS]
+    state["activity"] = {}
+    state["med_health"] = []
+
+
+def read_mediarium():
+    try:
+        queue = mget("/api/queue?active=1")
+        movies = cached("/api/movies?brief=1", 60)
+        series = cached("/api/series?brief=1", 60)
+        calendar = cached("/api/calendar", 60)
+        events = cached("/api/activity?limit=300", 20)
+        indexers = cached("/api/indexers", 120)
+        health = cached("/api/health", 60)["items"]
+    except (OSError, ValueError, KeyError, urllib.error.URLError):
+        state["sab"] = {"ok": False}
+        all_down()
+        return
+    now = datetime.now(timezone.utc)
+    now_ms = time.time() * 1000
+    stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Downloads: Mediarium reports progress, not speed, so the speed is how much more is done since the last reading.
+    t_last = dl_last.get("_t")
+    done, items = {}, []
+    owner, names = {}, {}
+    for q in queue:
+        qid = str(q["id"])
+        title = " ".join(x for x in (q.get("title") or tidy(q.get("releaseTitle") or ""), q.get("subtitle")) if x)
+        names[qid] = title
+        owner[qid] = "Movies" if q.get("movieId") else "TV" if q.get("seriesId") else "Downloads"
+        size = q.get("sizeBytes") or 0
+        done[qid] = size * (q.get("progressPct") or 0) / 100
+        items.append({"id": qid, "title": title, "pct": q.get("progressPct") or 0, "left": hb(max(0, size - done[qid])), "size": hb(size), "state": q.get("status"), "left_bytes": max(0, size - done[qid])})
+    delta = sum(max(0, done[i] - dl_last.get(i, done[i])) for i in done)
+    speed = delta / (time.time() - t_last) if t_last and time.time() > t_last else 0
+    dl_last.clear()
+    dl_last.update(done)
+    dl_last["_t"] = time.time()
+    totals = track_totals(delta)
+    left = sum(i["left_bytes"] for i in items)
+    eta = "-"
+    if speed > 0 and left:
+        mins = int(left / speed // 60)
+        eta = f"{mins // 60}h {mins % 60:02d}m" if mins >= 60 else f"{mins}m"
+    failed_week = sum(1 for e in events if e["eventType"] == "failed" and now_ms - utc_ms(e["createdAt"]) < 7 * 86400 * 1000)
+    state["sab"] = {
+        "ok": True, "paused": bool(items) and all(i["state"] in ("paused", "stopped") for i in items),
+        "speed": speed, "left": left, "eta": eta, "queueTotal": len(items),
+        "queue": [{k: v for k, v in i.items() if k != "left_bytes"} for i in items], "failed": failed_week, "totals": totals,
+    }
+    download_titles.clear(); download_titles.update(names)
+    download_owner.clear(); download_owner.update(owner)
+
+    # Recently added: what Mediarium imported lately, matched to the movie or show it belongs to.
+    by_movie = {m["title"].lower(): m for m in movies}
+    by_show = {s["title"].lower(): s for s in series}
+    recent_movies, recent_shows, seen = [], [], set()
+    for e in events:
+        if e["eventType"] != "imported":
+            continue
+        name, _, rest = e["message"].partition(": imported ")
+        m, s = by_movie.get(name.lower()), by_show.get(name.lower())
+        if name.lower() in seen or not (m or s):
+            continue
+        seen.add(name.lower())
+        if m and len(recent_movies) < 8:
+            recent_movies.append({"title": m["title"], "year": m.get("year"), "poster": m.get("posterUrl"), "size": m.get("sizeBytes", 0), "quality": m.get("quality"), "when": e["createdAt"]})
+        elif s and len(recent_shows) < 8:
+            recent_shows.append({"title": s["title"], "sub": rest.split(" from ")[0], "poster": s.get("posterUrl"), "quality": None, "when": e["createdAt"]})
+
+    # Movies with no import in the log (it only reaches back so far) fill the row, newest first.
+    for m in sorted(movies, key=lambda m: m["id"], reverse=True):
+        if len(recent_movies) >= 8:
+            break
+        if m.get("status") == "downloaded" and m["title"].lower() not in seen:
+            recent_movies.append({"title": m["title"], "year": m.get("year"), "poster": m.get("posterUrl"), "size": m.get("sizeBytes", 0), "quality": m.get("quality"), "when": None})
+
+    # Coming up: episodes and releases from the calendar, next 14 days.
+    horizon = (now + timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    up_movies, up_shows, aired_missing = [], [], 0
+    for c in calendar:
+        when = c.get("airAt") or ((c.get("releaseDate") or "") + "T00:00:00Z")
+        if c.get("kind") == "episode":
+            if c.get("status") == "missing" and when < stamp:
+                aired_missing += 1
+            if stamp <= when <= horizon:
+                up_shows.append({"kind": "Episode", "title": f"{c.get('title', '')} {(c.get('subtitle') or '').split(' ·')[0]}".strip(), "when": when})
+        elif c.get("kind") == "movie" and stamp <= when <= horizon:
+            up_movies.append({"kind": "Movie", "title": c.get("title"), "when": when})
+
+    routed = {"radarr": [], "sonarr": [], "bazarr": [], "prowlarr": []}
+    other = []
+    for h in health:
+        text = f"{h.get('id', '')} {h.get('title', '')}".lower()
+        level = "error" if h.get("level") == "error" else "warning"
+        target = "bazarr" if "subtitle" in text else "prowlarr" if "indexer" in text else None
+        (routed[target] if target else other).append({"level": level, "message": h.get("title")})
+    state["med_health"] = other
+
+    have = [m for m in movies if m.get("status") == "downloaded"]
+    state["radarr"] = {"ok": True, "library": {"total": len(movies), "have": len(have), "size": sum(m.get("sizeBytes", 0) for m in movies)}, "missing": len(movies) - len(have), "recent": recent_movies, "upcoming": up_movies, "health": routed["radarr"]}
+    state["sonarr"] = {"ok": True, "library": {"total": len(series), "have": sum(s.get("downloadedCount", 0) for s in series), "episodes": sum(s.get("episodeCount", 0) for s in series), "size": sum(s.get("sizeBytes", 0) for s in series)}, "missing": aired_missing, "recent": recent_shows, "upcoming": up_shows, "health": routed["sonarr"]}
+    state["prowlarr"] = {"ok": True, "indexers": len(indexers), "enabled": sum(1 for i in indexers if i.get("enabled")), "health": routed["prowlarr"]}
+    state["bazarr"] = {"ok": True, "health": routed["bazarr"]}
+
+    recent_event = lambda kind: any(e["eventType"] == kind and now_ms - utc_ms(e["createdAt"]) < 120 * 1000 for e in events)
+    act = {"Indexers": "Searching for releases" if recent_event("grabbed") else None, "Subtitles": "Fetching subtitles" if recent_event("subtitle") else None}
+    for who in ("Movies", "TV"):
+        busy = next((i for i in items if owner[i["id"]] == who and i["state"] in ("downloading", "importing")), None)
+        act[who] = f"{'Importing' if busy['state'] == 'importing' else 'Downloading'} {busy['title']} · {round(busy['pct'])}%" if busy else None
+    state["activity"] = act
+    state["services"] = [{"name": n, "up": True} for n in KEYS]
+
+
+def read_container():
+    """CPU and memory of the Mediarium container itself."""
+    out = sh("/usr/bin/docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}|{{.MemUsage}}", MEDIARIUM_CONTAINER, timeout=15).strip()
+    m = re.match(r"([\d.]+)%\|([\d.]+)(\w+) /", out)
+    if not m:
+        state["mediarium"] = {"ok": False}
+        return
+    scale = {"B": 1, "KiB": 1024, "MiB": 1048576, "GiB": 1073741824}.get(m[3], 1)
+    state["mediarium"] = {"ok": True, "cpu": float(m[1]), "mem": float(m[2]) * scale}
+
+
+def up_next(name, n=5):
+    """The next downloads in Mediarium's order, for the popup on a worker. Movies and TV get only their own."""
+    if name not in ("Downloads", "Movies", "TV"):
+        return []
+    sab = state["sab"]
+    out = []
+    for s in sab.get("queue", []) if sab.get("ok") else []:
+        if name != "Downloads" and download_owner.get(s["id"]) != name:
+            continue
+        out.append({"title": s["title"], "pct": round(s["pct"]), "size": s.get("size")})
+        if len(out) == n:
+            break
+    return out
+
+
 def activity(name):
-    """The task an app is busy with, or None when it has nothing to do."""
-    if name == "SABnzbd":
+    """The task a worker is busy with, or None when it has nothing to do."""
+    if name == "Downloads":
         sab = state["sab"]
         if not sab.get("ok") or sab["paused"] or not (sab["speed"] > 0 or sab["queueTotal"]):
             return None
         top = sab["queue"][0] if sab["queue"] else None
-        if not top:
-            return "Downloading"
-        title = download_titles.get((top.get("id") or "").lower()) or tidy(top["title"])
-        return f"Downloading {title} · {round(top['pct'])}%"
-    if name == "Home Cinema":
-        cin = state["cinema"]
-        if cin.get("streams"):
-            st = cin["streams"][0]
-            return f"Streaming {st['title']}" + (f" to {st['who']}" if st.get("who") else "")
-        return "Converting a video" if cin.get("converting") else None
+        return f"Downloading {top['title']} · {round(top['pct'])}%" if top else "Downloading"
     return state["activity"].get(name)
-
-
-def read_sab():
-    c = sab_config()
-    if not c:
-        return
-    def get(mode):
-        return get_json(f"http://127.0.0.1:{c['port']}{c['base']}/api?output=json&apikey={c['key']}&mode={mode}")
-    try:
-        q = get("queue&limit=60")["queue"]  # enough to find the next few of Radarr's and of Sonarr's
-        failed = get("history&limit=1&failed_only=1")["history"].get("noofslots", 0)
-        st = get("server_stats")
-    except (OSError, ValueError, KeyError, urllib.error.URLError):
-        state["sab"] = {"ok": False}
-        return
-    num = lambda v: float(v or 0)
-    state["sab"] = {
-        "ok": True, "version": q.get("version"), "paused": bool(q.get("paused")),
-        "speed": num(q.get("kbpersec")) * 1024, "left": num(q.get("mbleft")) * 1048576, "eta": q.get("timeleft"),
-        "queueTotal": q.get("noofslots_total", 0),
-        "queue": [{"id": s.get("nzo_id"), "title": html.unescape(s.get("filename") or ""), "pct": num(s.get("percentage")), "left": s.get("timeleft"), "size": s.get("size"), "state": s.get("status")} for s in q.get("slots", [])],
-        "failed": failed,
-        "totals": {k: st.get(k, 0) for k in ("day", "week", "month", "total")},
-    }
 
 
 # ---------- what needs attention ----------
@@ -589,27 +466,17 @@ def alerts():
     for s in state["services"]:
         if not s["up"]:
             add("error", s["name"], "Not running")
-        elif state[{"Home Cinema": "cinema", "SABnzbd": "sab"}.get(s["name"], s["name"].lower())].get("ok") is False:
-            add("error", s["name"], "Running, but not responding")
-    for d in state["cinema"].get("missing_drives", []):
-        add("error", "Drives", f"{d} is not connected, so Home Cinema can't see what's on it")
-    for name in ("Radarr", "Sonarr", "Bazarr", "Prowlarr"):
-        s = state[name.lower()]
-        if not s.get("ok"):
-            continue
-        for h in s.get("health", []):
-            add("error" if h["level"] == "error" else "warning", name, h["message"])
-        for r in s.get("roots", []):
-            if not r["ok"]:
-                add("error", name, f"Root folder not reachable: {r['path']}")
-        if "roots" in s and not s["roots"]:
-            add("warning", name, "No root folder set, so nothing can be imported")
+    for h in state.get("med_health", []):
+        add(h["level"], "Mediarium", h["message"])
+    for name in ("Movies", "TV", "Subtitles", "Indexers"):
+        for h in state[KEYS[name]].get("health", []):
+            add(h["level"], name, h["message"])
     sab = state["sab"]
     if sab.get("ok"):
         if sab["paused"]:
-            add("warning", "SABnzbd", "Downloads are paused")
+            add("warning", "Downloads", "Downloads are paused")
         if sab["failed"]:
-            add("warning", "SABnzbd", f"{sab['failed']} failed download(s) in history")
+            add("warning", "Downloads", f"{sab['failed']} failed download(s) this week")
     for d in state["disks"]:
         if d["free"] / d["total"] < 0.1:
             add("warning", "Drives", f"{d['name']} is over 90% full")
@@ -669,9 +536,7 @@ def session_token():
 
 class Handler(BaseHTTPRequestHandler):
     def authed(self):
-        # The Host check stops a website in this Mac's browser getting in through a look-alike hostname.
-        if self.client_address[0] == "127.0.0.1" and self.headers.get("Host", "").split(":")[0] in ("127.0.0.1", "localhost"):
-            return True
+        # No localhost bypass: anything running on this machine (or proxying to it) must log in too.
         cookies = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
         return "dash_auth" in cookies and hmac.compare_digest(cookies["dash_auth"].value, session_token())
 
@@ -718,7 +583,7 @@ class Handler(BaseHTTPRequestHandler):
         url = url.replace("/t/p/original/", "/t/p/w500/")
         if url not in poster_cache:
             try:
-                with urllib.request.urlopen(url, timeout=8) as r:
+                with NO_REDIRECT.open(url, timeout=8) as r:
                     poster_cache[url] = (r.read(2_000_000), r.headers.get("Content-Type", "image/jpeg"))
             except OSError:
                 return self.reply(502, b"Poster unavailable", "text/plain")
@@ -738,7 +603,7 @@ class Handler(BaseHTTPRequestHandler):
         given = urllib.parse.parse_qs(self.rfile.read(size).decode("utf-8", "replace")).get("password", [""])[0]
         if hmac.compare_digest(given.encode(), password().encode()):
             failures.pop(ip, None)
-            return self.redirect("/", f"dash_auth={session_token()}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Strict")
+            return self.redirect("/", f"dash_auth={session_token()}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict")
         attempts = 1 if fail[1] else fail[0] + 1  # a finished lockout starts counting again
         failures[ip] = [attempts, time.time() + LOCKOUT if attempts >= MAX_ATTEMPTS else 0]
         time.sleep(0.8)
@@ -756,22 +621,33 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def serve(host):
+    """Listen on one address, retrying until it exists (the Tailscale address isn't there yet right after boot)."""
+    while True:
+        try:
+            server = ThreadingHTTPServer((host, PORT), Handler)
+        except OSError as e:
+            print(f"cannot listen on {host}:{PORT} yet ({e.strerror}); retrying", flush=True)
+            time.sleep(5)
+            continue
+        print(f"listening on http://{host}:{PORT}", flush=True)
+        server.serve_forever()
+
+
 if __name__ == "__main__":
     password()  # made on first run, so it's there to look up
-    print(f"{TITLE}{' (demo)' if DEMO else ''}: http://localhost:{PORT}  ·  other devices log in with the password in {PASSWORD_FILE}", flush=True)
+    print(f"{TITLE}{' (demo)' if DEMO else ''}: log in with the password in {PASSWORD_FILE}", flush=True)
     if DEMO:
         import demo
-        ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
-    read_static()
-    threading.Thread(target=system_loop, daemon=True).start()
-    looped(5, read_sab)
-    looped(5, read_cinema)
-    looped(5, read_radarr)
-    looped(5, read_sonarr)
-    looped(5, read_services)
-    looped(30, read_disks)
-    looped(30, read_network)
-    looped(60, read_prowlarr)
-    looped(30, read_bazarr)
-    looped(5, read_activity)
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    else:
+        read_static()
+        threading.Thread(target=system_loop, daemon=True).start()
+        load_totals()
+        looped(5, read_mediarium)
+        looped(10, read_container)
+        looped(30, read_disks)
+        looped(30, read_network)
+        looped(60, lambda: save_totals())
+    for host in BIND[1:]:
+        threading.Thread(target=serve, args=(host,), daemon=True).start()
+    serve(BIND[0])

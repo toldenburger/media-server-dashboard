@@ -113,7 +113,7 @@ h3:first-child { margin-top: 0; }
   </div>
   <section class="row" id="services" aria-label="Services"></section>
   <div class="row r3" id="middle">
-    <section class="card" id="cinemaCard"><h2>Home Cinema</h2><div id="cinema"></div></section>
+    <section class="card"><h2>Mediarium<span class="right" id="medState"></span></h2><div class="hero" id="medV">-</div><div class="chart" id="medC"></div><div class="chart" id="medM"></div></section>
     <section class="card"><h2>Download queue</h2><div id="queue"></div></section>
     <section class="card"><h2>Drives</h2><div id="drives"></div></section>
   </div>
@@ -215,7 +215,7 @@ document.addEventListener('mouseout', hideTip);
 document.addEventListener('focusin', showTip);
 document.addEventListener('focusout', hideTip);
 
-// "Next up" list for a popup: the next few downloads in SABnzbd's order.
+// "Next up" list for a popup: the next few downloads in Mediarium's order.
 function nextTip(list) {
   if (!list || !list.length) return '';
   return 'Next up\n' + list.map((x, i) => `${i + 1}. ${x.title}${x.pct ? ` · ${x.pct}%` : ''}${x.size ? ` · ${x.size}` : ''}`).join('\n');
@@ -247,7 +247,7 @@ function put(id, value) { if (html[id] !== value) { html[id] = value; $(id).inne
 
 function render(d) {
   last = d;
-  const s = d.system, h = d.history, mem = s.memory || {}, net = d.network, cin = d.cinema, sab = d.sab;
+  const s = d.system, h = d.history, mem = s.memory || {}, net = d.network, sab = d.sab;
   document.title = (d.alerts.some((a) => a.level === 'error') ? '● ' : '') + d.title;
   const errors = d.alerts.filter((a) => a.level === 'error').length;
   const allIssues = d.alerts.map((a) => `${a.source}: ${a.message}`).join('\n');
@@ -264,7 +264,7 @@ function render(d) {
   $('memV').innerHTML = mem.total ? `${bytes(mem.used)}<small>of ${bytes(mem.total, 0)} · swap ${bytes(mem.swap_used)}</small>` : '-';
   $('netV').innerHTML = `↓ ${rate(h.rx[h.rx.length - 1])}<small>↑ ${rate(h.tx[h.tx.length - 1])}</small>`;
   $('sabV').innerHTML = sab.ok ? `${rate(sab.speed)}<small>${sab.queueTotal} in queue${sab.queueTotal ? ` · ${bytes(sab.left)} left · ${esc(sab.eta)}` : ''}</small>` : 'Not responding';
-  const sabNext = nextTip((d.services.find((v) => v.name === 'SABnzbd') || {}).next);
+  const sabNext = nextTip((d.services.find((v) => v.name === 'Downloads') || {}).next);
   if (sabNext) { $('sabV').dataset.tip = sabNext; $('sabV').tabIndex = 0; } else { delete $('sabV').dataset.tip; $('sabV').removeAttribute('tabindex'); }
   put('sabState', !sab.ok ? pill('error', 'Down') : sab.paused ? pill('warning', 'Paused') : pill('', sab.speed > 0 ? 'Downloading' : 'Idle'));
 
@@ -276,21 +276,22 @@ function render(d) {
 
   put('services', d.services.map(service).join(''));
 
-  const missing = (cin.missing_drives || []).map((n) => `<div class="meter"><div class="top"><span>${esc(n)}</span>${pill('error', 'Not connected')}</div><div class="track"></div></div>`).join('');
+  const missing = [].map((n) => `<div class="meter"><div class="top"><span>${esc(n)}</span>${pill('error', 'Not connected')}</div><div class="track"></div></div>`).join('');
   put('drives', d.disks.map((x) => { const used = (x.total - x.free) / x.total * 100; return `<div class="meter"><div class="top"><span>${esc(x.name)}</span><span class="muted small">${bytes(x.free)} free of ${bytes(x.total, 0)}</span></div><div class="track"><div class="fill ${level(used)}" style="width:${used}%"></div></div></div>`; }).join('') + missing);
 
-  // Home Cinema is optional; without it the queue and drives share the row.
-  $('cinemaCard').hidden = !cin.enabled;
-  $('middle').className = cin.enabled ? 'row r3' : 'row r2';
-  put('cinema', cin.watched ? `<h3>Open right now</h3>${rows(cin.streams, (t) => `<li><span class="t" title="${esc(t.title)}">${esc(t.title)}</span><span class="m">${t.who ? `${who(t.who)}${t.pct}%` : esc(t.service || 'Unknown')}</span></li>`, 'Nothing is playing')}
-    <h3>Latest watched</h3>${rows(cin.watched, (w) => `<li><span class="t" title="${esc(w.title)}">${esc(w.title)}</span><span class="m">${who(w.who)}${w.pct}% · ${esc(ago(w.when))}</span></li>`, 'Nothing watched yet')}` : '<div class="empty">Reading…</div>');
+  const med = d.mediarium || {};
+  put('medState', med.ok ? pill('', 'Running') : pill('error', 'Down'));
+  $('medV').innerHTML = med.ok ? `${med.cpu.toFixed(1)}% CPU<small>${bytes(med.mem)} memory</small>` : '-';
+  chart('medC', [{ name: 'CPU', color: 'var(--s1)', values: h.mcpu }], (v) => v.toFixed(1) + '%');
+  chart('medM', [{ name: 'Memory', color: 'var(--s2)', values: h.mmem }], (v) => bytes(v));
+  $('middle').className = 'row r3';
 
-  put('queue', !sab.ok ? '<div class="empty">SABnzbd is not responding</div>' : `<div class="tiles">${tile(bytes(sab.totals.day), 'Today')}${tile(bytes(sab.totals.week), 'This week')}${tile(bytes(sab.totals.month), 'This month')}${tile(bytes(sab.totals.total), 'All time')}</div>
-    <h3>In SABnzbd</h3>${rows(sab.queue.slice(0, 8), (q) => `<li><span class="t" title="${esc(q.title)}">${esc(q.title)}</span><span class="m">${Math.round(q.pct)}% · ${esc(q.left)}</span></li>`, 'Queue is empty')}`);
+  put('queue', !sab.ok ? '<div class="empty">Mediarium is not responding</div>' : `<div class="tiles">${tile(bytes(sab.totals.day), 'Today')}${tile(bytes(sab.totals.week), 'This week')}${tile(bytes(sab.totals.month), 'This month')}${tile(bytes(sab.totals.total), 'All time')}</div>
+    <h3>In the queue</h3>${rows(sab.queue.slice(0, 8), (q) => `<li><span class="t" title="${esc(q.title)}">${esc(q.title)}</span><span class="m">${Math.round(q.pct)}% · ${esc(q.left)}</span></li>`, 'Queue is empty')}`);
 
   const R = d.radarr, S = d.sonarr;
-  put('radarrSum', R.ok ? esc(`${num(R.library.have)} of ${num(R.library.total)} on disk · ${bytes(R.library.size)} · ${num(R.missing)} missing`) : pill('error', 'Radarr down'));
-  put('sonarrSum', S.ok ? esc(`${num(S.library.total)} series · ${num(S.library.have)} of ${num(S.library.episodes)} episodes · ${bytes(S.library.size)}`) : pill('error', 'Sonarr down'));
+  put('radarrSum', R.ok ? esc(`${num(R.library.have)} of ${num(R.library.total)} on disk · ${bytes(R.library.size)} · ${num(R.missing)} missing`) : pill('error', 'Movies down'));
+  put('sonarrSum', S.ok ? esc(`${num(S.library.total)} series · ${num(S.library.have)} of ${num(S.library.episodes)} episodes · ${bytes(S.library.size)}`) : pill('error', 'TV down'));
   put('movies', posters(R.recent || [], 'Nothing added yet'));
   put('shows', posters(S.recent || [], 'Nothing added yet'));
   put('upcoming', rows(d.upcoming, (u) => `<li><span class="m" style="width:96px">${esc(day(u.when))}</span><span class="t">${esc(u.title)}</span><span class="m">${esc(u.kind)}</span></li>`, 'Nothing scheduled'));

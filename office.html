@@ -542,7 +542,7 @@ const desks = DESKS.map(([x, z], i) => {
   for (const sx of [-0.32, 0.32]) { rbox(0.06, 0.04, 0.32, 0.02, '#4a4f61', sx, 0.66, 0.05, chair); cyl(0.015, 0.015, 0.16, '#4a4f61', sx, 0.58, 0.12, chair, 8); }
   return { screenMat };
 });
-// parcels waiting beside SABnzbd's desk
+// parcels waiting beside the Downloads desk
 const parcels = [];
 for (let i = 0; i < 12; i++) {
   const layer = Math.floor(i / 4), kk = i % 4;
@@ -554,7 +554,7 @@ for (let i = 0; i < 12; i++) {
   parcels.push(p);
 }
 
-// ---------- status whiteboard on the left wall: live graphs for the Mac mini ----------
+// ---------- status whiteboard on the left wall: live graphs for the Server ----------
 const fmtBytes = (b) => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0, n = b || 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i < 2 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i]; };
 // network meters and graphs read full at 100 Mbit/s; faster bursts just peg them
 const NET_FULL = 100e6 / 8;
@@ -605,7 +605,7 @@ plane(WB_WIDTH, WB_HEIGHT, new THREE.MeshStandardMaterial({ map: wb, roughness: 
 rbox(0.16, 0.05, WB_WIDTH * 0.6, 0.02, '#c3c7d1', -11.86, WB_Y - WB_HEIGHT / 2 - 0.05, WB_Z);
 ['#e05d5d', '#4f86e0', '#3fae7a'].forEach((c, i) => { const m = cyl(0.025, 0.025, 0.28, c, -11.84, WB_Y - WB_HEIGHT / 2 - 0.0, WB_Z - 1.2 + i * 0.4); m.rotation.x = Math.PI / 2; });
 
-// ---------- data center: the Mac mini itself, racks with live meters, drive monitors ----------
+// ---------- data center: the Server itself, racks with live meters, drive monitors ----------
 const DC = { x0: -12, x1: -4.4, z0: 5.2, z1: 9 };
 const DCX = (DC.x0 + DC.x1) / 2, DCW = DC.x1 - DC.x0;
 const raised = canvasTexture(256, 256, (g, w, h) => {
@@ -707,7 +707,7 @@ for (let b = 0; b < 5; b++) { const blade = rbox(0.08, 0.24, 0.015, 0.01, '#9aa0
 ball(0.05, '#c9ced6', 0, 0, 0.01, fan);
 for (let v = 0; v < 4; v++) box(0.6, 0.02, 0.01, '#b8bcc8', 0, 0.2 + v * 0.06, 0.31, cooler);
 
-// the Mac mini, oversized, on a pedestal, with a glow that follows the CPU
+// the Server, oversized, on a pedestal, with a glow that follows the CPU
 const mini = group(-8.0, 0.08, 7.05, scene, 0.75);
 rbox(1.9, 0.6, 1.9, 0.08, '#f4f2ee', 0, 0.3, 0, mini);
 const miniGlow = add(new THREE.CylinderGeometry(0.78, 0.78, 0.04, 40), mat('#4ab0ff', { emissive: '#4ab0ff', emissiveIntensity: 0.5 }), 0, 0.62, 0, mini, false);
@@ -797,7 +797,7 @@ function animateDataCenter(dt) {
 }
 const dcTag = document.createElement('div');
 dcTag.className = 'label';
-dcTag.innerHTML = '<div class="tag"><i class="dot"></i><b>Mac mini</b><span></span><i class="badge" tabindex="0">!</i></div>';
+dcTag.innerHTML = '<div class="tag"><i class="dot"></i><b>Server</b><span></span><i class="badge" tabindex="0">!</i></div>';
 $('labels').append(dcTag);
 
 function updateBoard(d) {
@@ -851,11 +851,11 @@ function cartoon(rootObj) {
 // Each worker has a look of their own: hair, skin, shirt, trousers and one signature accessory.
 const STAFF = {
   'Home Cinema': { color: '#5fcdb4', trim: '#ffffff', pants: '#3a4060', hair: '#3b2a20', style: 'short', skin: '#f1d3b8', extra: 'frames', eye: '#6b4a2f', quips: ['Nobody watching. Popcorn time 🍿', 'Library looks great', 'Waiting for movie night'] },
-  Radarr: { color: '#f2c94c', trim: '#c79a1a', pants: '#2f3550', hair: '#1f1a17', style: 'curly', skin: '#a9774f', extra: 'glasses', eye: '#3b2a1a', quips: ['No movies to grab', 'Wanted list checked ✓', 'Coffee first ☕'] },
-  Sonarr: { color: '#6fb3f2', trim: '#ffffff', pants: '#4a3f35', hair: '#7a4a24', style: 'long', skin: '#f3d6c1', extra: 'headphones', eye: '#3f7fbf', quips: ['No new episodes yet', 'All caught up', 'Your serve!'] },
-  Bazarr: { color: '#a98cf0', trim: '#f2c94c', pants: '#2c2c3a', hair: '#e2c26b', style: 'bun', skin: '#e8b994', extra: 'bowtie', eye: '#3f9a66', quips: ['Subtitles all done', 'Nothing to translate', 'Mmm, coffee'] },
-  Prowlarr: { color: '#ef8fb5', trim: '#ffffff', pants: '#34405e', hair: '#2b2b38', style: 'short', skin: '#7a4d32', extra: 'beanie', eye: '#4a3020', quips: ['Indexers all quiet', 'Nobody asked me anything', 'Match point!'] },
-  SABnzbd: { color: '#a8d65a', trim: '#5c8a1f', pants: '#3d3a52', hair: '#9c3d2a', style: 'spiky', skin: '#f0c9a6', extra: 'cap', eye: '#5d7f34', quips: ['Queue is empty ☕', 'Bandwidth on standby', 'This bean bag is great'] },
+  Movies: { color: '#f2c94c', trim: '#c79a1a', pants: '#2f3550', hair: '#1f1a17', style: 'curly', skin: '#a9774f', extra: 'glasses', eye: '#3b2a1a', quips: ['No movies to grab', 'Wanted list checked ✓', 'Coffee first ☕'] },
+  TV: { color: '#6fb3f2', trim: '#ffffff', pants: '#4a3f35', hair: '#7a4a24', style: 'long', skin: '#f3d6c1', extra: 'headphones', eye: '#3f7fbf', quips: ['No new episodes yet', 'All caught up', 'Your serve!'] },
+  Subtitles: { color: '#a98cf0', trim: '#f2c94c', pants: '#2c2c3a', hair: '#e2c26b', style: 'bun', skin: '#e8b994', extra: 'bowtie', eye: '#3f9a66', quips: ['Subtitles all done', 'Nothing to translate', 'Mmm, coffee'] },
+  Indexers: { color: '#ef8fb5', trim: '#ffffff', pants: '#34405e', hair: '#2b2b38', style: 'short', skin: '#7a4d32', extra: 'beanie', eye: '#4a3020', quips: ['Indexers all quiet', 'Nobody asked me anything', 'Match point!'] },
+  Downloads: { color: '#a8d65a', trim: '#5c8a1f', pants: '#3d3a52', hair: '#9c3d2a', style: 'spiky', skin: '#f0c9a6', extra: 'cap', eye: '#5d7f34', quips: ['Queue is empty ☕', 'Bandwidth on standby', 'This bean bag is great'] },
 };
 const BREAKS = [
   { at: [5.55, -7.35], face: 0, pose: 'couch' },
