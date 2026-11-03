@@ -84,6 +84,21 @@ None of these need credentials; they read local state only.
 - **Backup vault**: a hatch in the floor ("the basement") with a screen showing when the last backup ran and each job's result. The ring glows green,
   or red when any job has failed. It reads your backup jobs' systemd units.
 
+### The record player (Navidrome)
+
+![The record player in the front corner](docs/screenshots/record_player.png)
+
+A little table in the front corner (so you look at it from behind) holds a turntable and a stack of the albums you played lately, with the newest
+cover on top. The record spins while something is playing; hover the stack for the track, the artist and the last few albums. It reads
+[Navidrome](https://www.navidrome.org)'s own database **read-only**, so it needs no login or API key, and it finds cover art next to the music files or
+inside them (read through `ffmpeg` into memory; nothing is written to disk).
+
+### Idle workers wander
+
+Workers who aren't busy no longer park in one spot: they stroll along the walkways between the couch, the coffee machine, the ping-pong table (a
+rally starts when two of them meet), the bean bag, the window (bird-watching) and the record player, and head back to their desk when there is work.
+Nobody shares a spot, and everyone stays a while before moving on.
+
 ## Setup
 
 1. In Mediarium make an API key (Profile, then API keys) and save it as one line in `mediarium_api_key`, mode 600 (it is in `.gitignore`).
@@ -95,6 +110,7 @@ None of these need credentials; they read local state only.
    |---|---|
    | BirdNET-Go | its address (default `http://localhost:8080`), no login |
    | Pi-hole v6 | its address, and its password in `secrets/pihole_password` |
+   | Navidrome | the path of its `navidrome.db` and the folder its music library points to, no login |
    | Docker, Tailscale, Cloudflared, backups | nothing (see `config.example.json` for overrides) |
 
    Remove a source you don't use by deleting its file or listing it in `"sources_off"`.

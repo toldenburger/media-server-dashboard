@@ -9,6 +9,7 @@
   "sources": {
     "birdnet": { "url": "http://localhost:8080" },
     "pihole": { "url": "http://pi.hole" },
+    "navidrome": { "db": "/path/to/navidrome/data/navidrome.db", "music_root": "/path/to/your/music" },
     "cloudflared": { "url": "http://127.0.0.1:20241" },
     "backups": { "jobs": [["Label shown on the vault", "name-of-a-systemd-user-unit-without-.service"]] }
   },
