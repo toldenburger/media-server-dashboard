@@ -8,3 +8,4 @@ __pycache__/
 mediarium_api_key
 stats.json
 secrets/
+.claude/
