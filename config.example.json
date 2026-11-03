@@ -4,5 +4,13 @@
   "bind": ["127.0.0.1", "<your tailscale ip, from: tailscale ip -4>"],
   "mediarium_url": "http://127.0.0.1:8264",
   "mediarium_container": "mediarium",
-  "mediarium_key_file": "mediarium_api_key"
+  "mediarium_key_file": "mediarium_api_key",
+  "secrets_dir": "secrets",
+  "sources": {
+    "birdnet": { "url": "http://localhost:8080" },
+    "pihole": { "url": "http://pi.hole" },
+    "cloudflared": { "url": "http://127.0.0.1:20241" },
+    "backups": { "jobs": [["Label shown on the vault", "name-of-a-systemd-user-unit-without-.service"]] }
+  },
+  "sources_off": []
 }
