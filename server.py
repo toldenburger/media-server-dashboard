@@ -548,11 +548,27 @@ def load_sources():
 
 
 def run_source(mod):
-    try:
-        state["extra"][mod.NAME] = mod.poll(mod.ctx)
-    except Exception as e:
-        print(f"source {mod.NAME}: {type(e).__name__}: {e}", flush=True)
+    """One poll of a source. It runs in its own thread so a poll that hangs (a hostname lookup can ignore every timeout) is abandoned
+    after a while and the source is tried again next round, instead of freezing for good."""
+    result = {}
+
+    def work():
+        try:
+            result["value"] = mod.poll(mod.ctx)
+        except Exception as e:
+            result["error"] = e
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    worker.join(getattr(mod, "TIMEOUT", 90))
+    if worker.is_alive():
+        print(f"source {mod.NAME}: no answer, will try again", flush=True)
         state["extra"][mod.NAME] = {"ok": False}
+    elif "error" in result:
+        print(f"source {mod.NAME}: {type(result['error']).__name__}: {result['error']}", flush=True)
+        state["extra"][mod.NAME] = {"ok": False}
+    else:
+        state["extra"][mod.NAME] = result["value"]
 
 
 def source_loop(mod):
