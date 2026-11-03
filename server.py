@@ -500,6 +500,11 @@ def payload():
     upcoming = sorted(state["radarr"].get("upcoming", []) + state["sonarr"].get("upcoming", []), key=lambda u: u["when"])[:8]
     issues = alerts()
     services = [{**s, "issues": [a for a in issues if a["source"] == s["name"]], "task": activity(s["name"]) if s["up"] else None, "next": up_next(s["name"]) if s["up"] else []} for s in state["services"]]
+    for mod in SOURCES.values():  # a source with SERVICE set also gets a worker at a desk
+        who = getattr(mod, "SERVICE", None)
+        if who:
+            ex = state["extra"].get(mod.NAME) or {}
+            services.append({"name": who, "up": bool(ex.get("ok")), "issues": [], "task": ex.get("task") if ex.get("ok") else None, "next": []})
     sab = state["sab"]
     if sab.get("queue"):  # downloads by the name they'll have in the library
         sab = {**sab, "queue": [{**q, "name": download_titles.get((q.get("id") or "").lower()) or tidy(q["title"])} for q in sab["queue"]]}

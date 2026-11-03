@@ -106,6 +106,7 @@ scene.add(sun);
 const lampGlow = new THREE.PointLight(0xffc98a, 6, 6, 1.6);
 lampGlow.position.set(9.3, 2.2, -7.6);
 scene.add(lampGlow);
+const LAMP_SHADES = [];  // materials of the lamp shades, so the office lamps can follow the living room lights
 
 // Frame the whole room as tightly as the window allows: measure its real outline from the camera.
 const ROOM_CORNERS = [];
@@ -347,8 +348,7 @@ function poster(z, top, bottom, emoji) {
   rbox(0.08, 1.5, 1.1, 0.02, '#2c2c34', -11.97, 2.0, z);
   plane(0.95, 1.33, new THREE.MeshStandardMaterial({ map: tex }), -11.92, 2.0, z, Math.PI / 2);
 }
-poster(-6.8, '#3a2a6b', '#e0607e', '🎞️');
-poster(-5.3, '#0f4c5c', '#5fcdb4', '🍿');
+// (the two small posters that used to hang here made room for the Immich photo frames)
 // a big digital clock, centred between the whiteboard and the door
 const clockFace = canvasTexture(512, 200, (g, w, h, text) => {
   g.fillStyle = '#141a2e'; g.fillRect(0, 0, w, h);
@@ -387,7 +387,7 @@ function monstera(x, z, s = 1) {
     leaf.rotation.x = 0.5;
   }
 }
-bush(-11.3, -5.6); snake(-0.95, -8.5, 0.7); monstera(11.2, -8.2, 1.2); bush(6.2, 8.45, 1.0); snake(-0.2, 8.4, 1.1); monstera(11.3, 1.4, 0.9); bush(-11.3, 3.4, 0.8);
+bush(-11.3, -5.6); snake(-0.95, -8.5, 0.7); monstera(11.45, -6.6, 1.1); bush(6.2, 8.45, 1.0); snake(-0.2, 8.4, 1.1); monstera(11.3, 1.4, 0.9); bush(-11.3, 3.4, 0.8);
 
 // ---------- break room ----------
 const rug = canvasTexture(512, 320, (g, w, h) => {
@@ -432,7 +432,7 @@ box(0.48, 0.03, 0.34, '#f7b8d4', 0.38, 0.545, 0.02, ct).rotation.y = -0.1;
 // floor lamp by the couch
 cyl(0.2, 0.22, 0.05, '#3a3f52', 9.3, 0.03, -7.6);
 cyl(0.025, 0.025, 1.9, '#3a3f52', 9.3, 0.98, -7.6);
-add(new THREE.CylinderGeometry(0.22, 0.38, 0.42, 24, 1, true), mat('#fff2d8', { emissive: '#ffd9a0', emissiveIntensity: 0.6, side: THREE.DoubleSide }), 9.3, 2.05, -7.6);
+LAMP_SHADES.push(add(new THREE.CylinderGeometry(0.22, 0.38, 0.42, 24, 1, true), mat('#fff2d8', { emissive: '#ffd9a0', emissiveIntensity: 0.6, side: THREE.DoubleSide }), 9.3, 2.05, -7.6).material);
 
 // kitchen: cabinets, counter, sink, coffee machine, mugs, fruit, fridge, shelf
 const k = group(2.1, 0, -8.5);
@@ -546,7 +546,7 @@ const desks = DESKS.map(([x, z], i) => {
   const prop = PROPS[i];
   if (prop === 'popcorn') { cyl(0.1, 0.08, 0.2, '#e8473c', -0.9, 0.9, -0.1, d); for (let j = 0; j < 6; j++) ball(0.035, '#fff6d8', -0.9 + Math.cos(j) * 0.05, 1.01, -0.1 + Math.sin(j) * 0.05, d); }
   if (prop === 'plant') { cyl(0.09, 0.07, 0.14, '#f0c7a8', -0.95, 0.87, -0.25, d); ball(0.11, '#6fbf8f', -0.95, 1.02, -0.25, d); ball(0.08, '#82cfa0', -0.9, 1.1, -0.22, d); }
-  if (prop === 'lamp') { cyl(0.1, 0.1, 0.03, '#3a3f52', -0.95, 0.82, -0.3, d); const arm = cyl(0.015, 0.015, 0.5, '#3a3f52', -0.92, 1.05, -0.25, d); arm.rotation.z = -0.3; add(new THREE.ConeGeometry(0.12, 0.16, 20, 1, true), mat('#f6d77a', { side: THREE.DoubleSide }), -0.8, 1.27, -0.2, d).rotation.z = 0.9; }
+  if (prop === 'lamp') { cyl(0.1, 0.1, 0.03, '#3a3f52', -0.95, 0.82, -0.3, d); const arm = cyl(0.015, 0.015, 0.5, '#3a3f52', -0.92, 1.05, -0.25, d); arm.rotation.z = -0.3; const cone = add(new THREE.ConeGeometry(0.12, 0.16, 20, 1, true), mat('#f6d77a', { side: THREE.DoubleSide, emissive: '#f6d77a', emissiveIntensity: 0.25 }), -0.8, 1.27, -0.2, d); cone.rotation.z = 0.9; LAMP_SHADES.push(cone.material); }
   if (prop === 'books') { for (let j = 0; j < 3; j++) rbox(0.38, 0.07, 0.26, 0.01, ['#e05d5d', '#4f86e0', '#3fae7a'][j], -0.9, 0.84 + j * 0.07, -0.2, d).rotation.y = j * 0.15; }
   if (prop === 'mug') { cyl(0.07, 0.06, 0.14, '#ffffff', -0.85, 0.88, -0.05, d); torus(0.045, 0.012, Math.PI * 2, '#ffffff', -0.78, 0.88, -0.05, d).rotation.y = Math.PI / 2; box(0.3, 0.01, 0.4, '#ffffff', -0.85, 0.815, -0.3, d).rotation.y = 0.3; }
   // office chair: five-star base with wheels, gas lift, seat, back and armrests
@@ -862,6 +862,7 @@ function cartoon(rootObj) {
 
 // Each worker has a look of their own: hair, skin, shirt, trousers and one signature accessory.
 const STAFF = {
+  Immich: { color: '#f28ab2', trim: '#ffffff', pants: '#3b3a52', hair: '#5a3b2a', style: 'short', skin: '#e8b994', extra: 'beanie', eye: '#5a3b2a', quips: ['Say cheese!', 'Perfect light today', 'Backing up the memories'] },
   'Home Cinema': { color: '#5fcdb4', trim: '#ffffff', pants: '#3a4060', hair: '#3b2a20', style: 'short', skin: '#f1d3b8', extra: 'frames', eye: '#6b4a2f', quips: ['Nobody watching. Popcorn time 🍿', 'Library looks great', 'Waiting for movie night'] },
   Movies: { color: '#f2c94c', trim: '#c79a1a', pants: '#2f3550', hair: '#1f1a17', style: 'curly', skin: '#a9774f', extra: 'glasses', eye: '#3b2a1a', quips: ['No movies to grab', 'Wanted list checked ✓', 'Coffee first ☕'] },
   TV: { color: '#6fb3f2', trim: '#ffffff', pants: '#4a3f35', hair: '#7a4a24', style: 'long', skin: '#f3d6c1', extra: 'headphones', eye: '#3f7fbf', quips: ['No new episodes yet', 'All caught up', 'Your serve!'] },
@@ -1295,11 +1296,12 @@ function render(d) {
   const rate = sab.ok ? sab.speed : 0;
   const speed = rate >= 1048576 ? (rate / 1048576).toFixed(1) + ' MB/s' : Math.round(rate / 1024) + ' KB/s';
   updateBoard(d);
-  const streams = d.cinema.streams || [];
+  const jf = (d.extra && d.extra.jellyfin) || {};
+  const streams = jf.streams || [];
   const recent = [...(d.radarr.recent || []).map((m) => ({ title: m.title, sub: m.year ? String(m.year) : '', poster: m.poster, when: m.when })),
     ...(d.sonarr.recent || []).map((m) => ({ title: m.title, sub: m.sub || '', poster: m.poster, when: m.when }))]
     .sort((a, b) => String(b.when).localeCompare(String(a.when))).slice(0, 4);
-  const viewers = (d.cinema.profiles || []).map((name) => {
+  const viewers = (jf.users || []).map((name) => {
     const st = streams.find((x) => x.who === name);
     return { name, initials: name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase(), watching: !!st, title: st && st.title };
   });
@@ -1377,7 +1379,7 @@ const props = [], pickables = [];
 let latestData = null, skyAt = -99;
 const kit = {
   THREE, scene, camera, add, mat, box, rbox, cyl, ball, capsule, torus, group, plane, canvasTexture, fitText,
-  windows: WINDOWS, sky, skyMat, sunAltitude, nowDate, pickables,
+  windows: WINDOWS, sky, skyMat, sunAltitude, nowDate, pickables, people, lamps: { glow: lampGlow, shades: LAMP_SHADES },
   // hover text for a prop: a string, or a function giving one
   // a standing character for a service that has no desk: spawn(label, look, {at: [x, z], face}, hoverText)
   spawn(name, look, spot, say) {

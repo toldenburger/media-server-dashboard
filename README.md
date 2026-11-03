@@ -93,6 +93,23 @@ cover on top. The record spins while something is playing; hover the stack for t
 [Navidrome](https://www.navidrome.org)'s own database **read-only**, so it needs no login or API key, and it finds cover art next to the music files or
 inside them (read through `ffmpeg` into memory; nothing is written to disk).
 
+### More of your home in the room
+
+![The wall: electricity ticker, bouncer, filing cabinet](docs/screenshots/office_wall.png)
+![The kitchen: piggy bank and suggestion box](docs/screenshots/kitchen_props.png)
+
+- **Jellyfin**: the "WATCHING" TV above the couch has a circle per user that lights up while they watch; hover it to see what is playing.
+- **Immich**: the two small wall frames show random photos from your library (swapped every couple of minutes; only logged-in viewers can see
+  them), and a **photographer** with a camera sits at a desk while Immich has uploads or machine learning jobs to work through.
+- **Home Assistant**: a **thermostat and radiator** under the right window (the radiator glows while the house is heating), an **electricity
+  price ticker** above the door (price now, and the next 24 hours as bars, green below average), and the **office lamps follow your living room
+  lights**: the same colour and brightness, fading smoothly.
+- **Nextcloud**: a **filing cabinet** whose top drawer opens further as the storage fills.
+- **BookOrbit**: a **bookshelf** with the three newest books standing face-out.
+- **FreshRSS**: a **stack of newspapers** on the coffee table, one more sheet for every few hundred unread articles.
+- **Seerr**: a **suggestion box** on the kitchen counter; the flag goes up and a slip of paper appears for every request waiting for a yes.
+- **Spaarpot** (a small savings-wish-list app): a **piggy bank** on the kitchen shelf with a coin per wish; hover for the list.
+
 ### Idle workers wander
 
 Workers who aren't busy no longer park in one spot: they stroll along the walkways between the couch, the coffee machine, the ping-pong table (a
@@ -111,6 +128,12 @@ Nobody shares a spot, and everyone stays a while before moving on.
    | BirdNET-Go | its address (default `http://birdnet-go.local:8080`), no login |
    | Pi-hole v6 | its address, and its password in `secrets/pihole_password` |
    | Navidrome | the path of its `navidrome.db` and the folder its music library points to, no login |
+   | Jellyfin | its address and an API key in `secrets/jellyfin_key` |
+   | Immich | its address and an API key in `secrets/immich_key` (read permissions: assets, server statistics, jobs) |
+   | Home Assistant | its address, a long-lived token in `secrets/ha_token`, and the entity ids to show (see `config.example.json`) |
+   | Seerr | its address and its API key in `secrets/seerr_key` |
+   | Nextcloud, FreshRSS, BookOrbit | the Docker container names; they are read with `docker exec`, no login |
+   | Spaarpot | the path of its SQLite file |
    | Docker, Tailscale, Cloudflared, backups | nothing (see `config.example.json` for overrides) |
 
    Remove a source you don't use by deleting its file or listing it in `"sources_off"`.
