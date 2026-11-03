@@ -505,6 +505,11 @@ def payload():
         if who:
             ex = state["extra"].get(mod.NAME) or {}
             services.append({"name": who, "up": bool(ex.get("ok")), "issues": [], "task": ex.get("task") if ex.get("ok") else None, "next": []})
+    for mod in SOURCES.values():  # a source can also hand over a list of workers (the coding agents), each with a look and a desk
+        ex = state["extra"].get(mod.NAME) or {}
+        for w in (ex.get("workers") or []) if ex.get("ok") else []:
+            issues = [{"level": "warning", "source": w["name"], "message": w["attention"]}] if w.get("attention") else []
+            services.append({"name": w["name"], "up": True, "issues": issues, "task": w.get("task") or w.get("attention"), "next": [], "look": w.get("look"), "desk": w.get("desk"), "attention": bool(w.get("attention"))})
     sab = state["sab"]
     if sab.get("queue"):  # downloads by the name they'll have in the library
         sab = {**sab, "queue": [{**q, "name": download_titles.get((q.get("id") or "").lower()) or tidy(q["title"])} for q in sab["queue"]]}

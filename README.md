@@ -110,6 +110,18 @@ inside them (read through `ffmpeg` into memory; nothing is written to disk).
 - **Seerr**: a **suggestion box** on the kitchen counter; the flag goes up and a slip of paper appears for every request waiting for a yes.
 - **Spaarpot** (a small savings-wish-list app): a **piggy bank** on the kitchen shelf with a coin per wish; hover for the list.
 
+### Coding agents (Claude Code and OpenCode)
+
+Every running **Claude Code** session and **OpenCode** instance is a worker too, in a different outfit so they stand out: Claude in a terracotta
+jumpsuit with a glowing antenna that pulses while it works, OpenCode in a dark suit with a neon visor. They have three desks along the back wall.
+A working agent sits and types; an idle one takes a break like everyone else.
+
+When an agent **needs you** (Claude Code is waiting for an approval or an answer), a **red light blinks on its desk**, the agent raises a hand and
+waves, and its label gets the usual "!" badge. This reads the status file each Claude Code session already keeps in `~/.claude/sessions`, so no
+hooks or settings are touched; OpenCode agents show up and work but do not ask for attention yet. The idea of a character that gets your
+attention comes from [clalt](https://github.com/dhitalkamal/clalt), which draws Claude agents in a 3D office of its own. Session names are only
+shown to logged-in viewers.
+
 ### Double-click to open
 
 Double-click almost anything in the office to open its service in a new tab: a worker or the parcel pile or a wall poster opens Mediarium, the
