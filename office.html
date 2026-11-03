@@ -387,7 +387,7 @@ function monstera(x, z, s = 1) {
     leaf.rotation.x = 0.5;
   }
 }
-bush(-11.3, -5.6); snake(-0.95, -8.5, 0.7); monstera(11.2, -8.2, 1.2); bush(11.2, 8.2, 1.1); snake(-0.2, 8.4, 1.1); monstera(11.3, 1.4, 0.9); bush(-11.3, 3.4, 0.8);
+bush(-11.3, -5.6); snake(-0.95, -8.5, 0.7); monstera(11.2, -8.2, 1.2); bush(6.2, 8.45, 1.0); snake(-0.2, 8.4, 1.1); monstera(11.3, 1.4, 0.9); bush(-11.3, 3.4, 0.8);
 
 // ---------- break room ----------
 const rug = canvasTexture(512, 320, (g, w, h) => {
@@ -870,13 +870,32 @@ const STAFF = {
   Downloads: { color: '#a8d65a', trim: '#5c8a1f', pants: '#3d3a52', hair: '#9c3d2a', style: 'spiky', skin: '#f0c9a6', extra: 'cap', eye: '#5d7f34', quips: ['Queue is empty ☕', 'Bandwidth on standby', 'This bean bag is great'] },
 };
 const BREAKS = [
-  { at: [5.55, -7.35], face: 0, pose: 'couch' },
-  { at: [7.25, -7.35], face: 0, pose: 'couch' },
-  { at: [4.25, -1.2], face: Math.PI / 2, pose: 'pingpong' },
-  { at: [1.15, -7.6], face: Math.PI, pose: 'coffee' },
-  { at: [8.15, -1.2], face: -Math.PI / 2, pose: 'pingpong', via: [[6.2, 0.9], [8.15, 0.9]] },
-  { at: [9.75, 3.75], face: Math.PI / 4, pose: 'beanbag' },
+  { at: [5.55, -7.35], face: 0, pose: 'couch', node: 'N2' },
+  { at: [7.25, -7.35], face: 0, pose: 'couch', node: 'N3' },
+  { at: [4.25, -1.2], face: Math.PI / 2, pose: 'pingpong', node: 'S1', via: [[2.8, -1.2]] },
+  { at: [1.15, -7.6], face: Math.PI, pose: 'coffee', node: 'NW' },
+  { at: [8.15, -1.2], face: -Math.PI / 2, pose: 'pingpong', node: 'S3' },
+  { at: [9.75, 3.75], face: Math.PI / 4, pose: 'beanbag', node: 'S4' },
+  { at: [9.9, -7.7], face: Math.PI, pose: 'birds', node: 'N4' },
+  { at: [10.3, 7.25], face: 0.8, pose: 'record', node: 'S3', via: [[8.2, 2.8], [8.0, 5.2], [9.4, 7.4]] },
 ];
+// How long someone stays at each spot before wandering off, in seconds [min, extra].
+const STAY = { couch: [30, 40], pingpong: [25, 25], coffee: [10, 12], beanbag: [30, 40], birds: [15, 20], record: [20, 25] };
+// The walkways of the break room: the corridor beside the desks and a lane along each side of the ping pong table.
+const NODES = { NW: [0.9, -3.7], MN: [0.9, -2.3], W: [0.9, 0.9], MS: [0.9, 3.4], N1: [2.6, -3.7], N2: [5.55, -3.7], N3: [7.25, -3.7], N4: [9.75, -3.7], S1: [2.8, 0.9], S2: [6.2, 0.9], S3: [8.15, 0.9], S4: [9.75, 0.9] };
+const LINKS = [['NW', 'MN'], ['MN', 'W'], ['W', 'MS'], ['NW', 'N1'], ['N1', 'N2'], ['N2', 'N3'], ['N3', 'N4'], ['W', 'S1'], ['S1', 'S2'], ['S2', 'S3'], ['S3', 'S4'], ['N4', 'S4']];
+function walkway(from, to) {  // the nodes to walk through, shortest first
+  const seen = { [from]: null }, queue = [from];
+  while (queue.length) {
+    const n = queue.shift();
+    if (n === to) break;
+    for (const [a, b] of LINKS) { const m = a === n ? b : b === n ? a : null; if (m && !(m in seen)) { seen[m] = n; queue.push(m); } }
+  }
+  const out = [];
+  for (let n = to; n; n = seen[n]) out.unshift(n);
+  return out;
+}
+function nearestNode(x, z) { return Object.entries(NODES).sort(([, A], [, B]) => Math.hypot(A[0] - x, A[1] - z) - Math.hypot(B[0] - x, B[1] - z))[0][0]; }
 const CORRIDOR = 0.9, AISLES = [-2.3, 3.4];
 
 function hairdo(head, s) {
@@ -1064,18 +1083,49 @@ const people = {};
 function seatOf(p) { const d = DESKS[p.i]; return { at: [d[0], d[1] + 0.88], face: Math.PI, pose: 'type' }; }
 function place(p, spot) { p.root.position.set(spot.at[0], 0, spot.at[1]); p.root.rotation.y = spot.face; p.pose = spot; }
 
+function release(p) { for (const b of BREAKS) if (b.owner === p) b.owner = null; }
+const taken = (b, p) => b.owner && b.owner !== p && b.owner.where === 'break' && b.owner.root.visible;
+// Walk from wherever p is to a break spot (or back to the desk) along the walkways.
+function walk(p, spot, toDesk) {
+  const pos = p.root.position, aisle = AISLES[DESKS[p.i][1] > 0 ? 1 : 0], mouth = aisle < 0 ? 'MN' : 'MS';
+  const settled = p.pose && p.pose.node && !p.path.length, atDesk = p.pose && p.pose.pose === 'type' && !p.path.length;
+  const start = settled ? p.pose.node : nearestNode(pos.x, pos.z);
+  const back = settled && p.pose.via ? [...p.pose.via].reverse() : [];
+  const along = (a, b) => walkway(a, b).map((n) => NODES[n]);
+  let pts;
+  if (toDesk) pts = [...back, ...along(start, mouth), [DESKS[p.i][0], aisle], spot.at];
+  else if (atDesk) pts = [[DESKS[p.i][0], aisle], ...along(mouth, spot.node), ...(spot.via || []), spot.at];
+  else pts = [...back, ...along(start, spot.node), ...(spot.via || []), spot.at];
+  p.path = pts.map(([x, z]) => new THREE.Vector3(x, 0, z));
+  p.pose = null;
+  p.arrive = spot;
+}
 function send(p, where, instant) {
   if (p.where === where) return;
   const from = p.where;
   p.where = where;
-  const spot = where === 'desk' ? seatOf(p) : BREAKS[p.i % BREAKS.length];
+  const own = BREAKS[p.i % BREAKS.length];
+  const spot = where === 'desk' ? seatOf(p) : (taken(own, p) ? BREAKS.find((b) => !taken(b, p)) || own : own);
+  if (where === 'desk') release(p); else spot.owner = p;
   if (instant || !from) { p.path = []; return place(p, spot); }
-  const aisle = AISLES[DESKS[p.i][1] > 0 ? 1 : 0];
-  const brk = BREAKS[p.i % BREAKS.length];
-  const toBreak = [[DESKS[p.i][0], aisle], [CORRIDOR, aisle], ...(brk.via || []), brk.at];
-  p.path = (where === 'desk' ? [...toBreak.slice(0, -1).reverse(), spot.at] : toBreak).map(([x, z]) => new THREE.Vector3(x, 0, z));
-  p.pose = null;
-  p.arrive = spot;
+  walk(p, spot, where === 'desk');
+  p.nextMove = undefined;
+}
+// Someone on a break wanders off to another free spot every so often.
+function roam(p, t) {
+  if (p.where !== 'break' || p.path.length || !p.pose || !p.pose.node) return;
+  const stay = STAY[p.pose.pose] || [20, 20];
+  if (p.nextMove === undefined) p.nextMove = t + stay[0] + Math.random() * stay[1];
+  if (t < p.nextMove) return;
+  const options = BREAKS.filter((b) => b !== p.pose && !taken(b, p));
+  if (!options.length) { p.nextMove = t + 10; return; }
+  // ping pong is only fun with a partner, so it is likelier when the other end is taken
+  const weights = options.map((b) => (b.pose === 'pingpong' ? (BREAKS.some((o) => o.pose === 'pingpong' && o !== b && o.owner && o.owner !== p && o.owner.where === 'break') ? 4 : 1) : 2));
+  let pick = Math.random() * weights.reduce((a, x) => a + x, 0), spot = options[0];
+  for (let i = 0; i < options.length; i++) { pick -= weights[i]; if (pick <= 0) { spot = options[i]; break; } }
+  release(p); spot.owner = p;
+  walk(p, spot, false);
+  p.nextMove = undefined;
 }
 
 const SPEED = 2.4;
@@ -1144,6 +1194,12 @@ function animate(p, dt, t) {
     p.shoulderL.rotation.x = p.shoulderR.rotation.x = -2.6;
     p.elbowL.rotation.x = p.elbowR.rotation.x = -1.9;
     head.rotation.set(0.1, Math.sin(t * 0.3 + p.phase) * 0.2, 0);
+  } else if (pose === 'birds') {
+    head.rotation.set(-0.25 + Math.sin(t * 0.6 + p.phase) * 0.08, Math.sin(t * 0.45 + p.phase) * 0.5, 0);
+    p.shoulderR.rotation.x = -0.5; p.elbowR.rotation.x = -1.6;
+  } else if (pose === 'record') {
+    head.rotation.set(0.05, 0.25, Math.sin(t * 2.2 + p.phase) * 0.09);
+    p.shoulderL.rotation.x = p.shoulderR.rotation.x = Math.sin(t * 2.2 + p.phase) * 0.12;
   } else if (pose === 'couch') {
     body.rotation.x = -0.1;
     p.shoulderL.rotation.x = p.shoulderR.rotation.x = -0.4;
@@ -1222,7 +1278,7 @@ function render(d) {
     badge.classList.toggle('show', svc.issues.length > 0);
     badge.classList.toggle('error', bad || !svc.up);
     Object.assign(p, { up: svc.up, task: svc.task, issue });
-    if (!svc.up) { p.where = null; p.path = []; return; }
+    if (!svc.up) { release(p); p.where = null; p.path = []; return; }
     send(p, svc.task ? 'desk' : 'break', first);
   });
   first = false;
@@ -1265,7 +1321,7 @@ async function tick() {
 
 // ---------- hover popups: what someone is doing, and any problems ----------
 const tip = $('tip');
-const BREAK_TEXT = { couch: 'Relaxing on the couch', pingpong: 'Playing ping pong', coffee: 'Having a coffee', beanbag: 'Chilling on a bean bag' };
+const BREAK_TEXT = { couch: 'Relaxing on the couch', pingpong: 'Playing ping pong', coffee: 'Having a coffee', beanbag: 'Chilling on a bean bag', birds: 'Watching the birds out the window', record: 'Listening to a record' };
 function doing(p) {
   if (p.say) return typeof p.say === 'function' ? p.say() : p.say;
   if (!p.up) return `${p.name}\nNot running` + (p.issue ? `\n⚠ ${p.issue}` : '');
@@ -1342,6 +1398,7 @@ const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
   for (const p of Object.values(people)) if (p.root.visible) animate(p, dt, t);
+  for (const p of Object.values(people)) if (p.root.visible) roam(p, t);
   code.offset.y = (code.offset.y + dt * 0.08) % 1;
   rally(t);
   animateDataCenter(dt);
