@@ -509,7 +509,7 @@ def payload():
     if sab.get("queue"):  # downloads by the name they'll have in the library
         sab = {**sab, "queue": [{**q, "name": download_titles.get((q.get("id") or "").lower()) or tidy(q["title"])} for q in sab["queue"]]}
     return json.dumps({
-        "title": TITLE, "location": CONFIG.get("location"), "now": int(time.time() * 1000), "alerts": issues, "history": {k: list(v) for k, v in history.items()},
+        "title": TITLE, "location": CONFIG.get("location"), "links": LINKS, "now": int(time.time() * 1000), "alerts": issues, "history": {k: list(v) for k, v in history.items()},
         "upcoming": upcoming, **state, "services": services, "sab": sab,
     })
 
@@ -581,6 +581,12 @@ def start_sources():
     load_sources()
     for mod in SOURCES.values():
         threading.Thread(target=source_loop, args=(mod,), daemon=True).start()
+
+
+# Where a double-click on an item in the office goes: "open" in each source's config (an address your browser can reach), plus "mediarium_open".
+LINKS = {n: c["open"] for n, c in (CONFIG.get("sources") or {}).items() if isinstance(c, dict) and c.get("open")}
+if CONFIG.get("mediarium_open"):
+    LINKS["mediarium"] = CONFIG["mediarium_open"]
 
 
 # ---------- login ----------

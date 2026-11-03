@@ -21,7 +21,7 @@ export default function (kit) {
   });
   let data = null;
   const tip = (f) => () => !data ? 'Immich' : `Immich photo frame\n${[f.info && f.info.place, f.info && date(f.info.taken)].filter(Boolean).join(' · ') || 'a random photo'}\n${data.photos.toLocaleString('en-GB')} photos and ${data.videos.toLocaleString('en-GB')} videos · ${gb(data.usage)}`;
-  frames.forEach((f) => kit.tipOn(f.pic, tip(f)));
+  frames.forEach((f) => kit.tipOn(f.pic, tip(f), 'immich'));
 
   // the photographer wears a camera on a strap; it flashes while there is work
   let camera = null, flashAt = 0;

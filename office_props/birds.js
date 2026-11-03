@@ -63,7 +63,7 @@ export default function (kit) {
   function show(c, info, tip) {
     const key = JSON.stringify(info);
     c.card.visible = c.frame.visible = true;
-    kit.tipOn(c.card, tip);
+    kit.tipOn(c.card, tip, 'birdnet');
     if (info.image !== c.src) {
       c.src = info.image; c.photo = null;
       const img = new Image();

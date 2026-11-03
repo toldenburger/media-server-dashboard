@@ -28,8 +28,8 @@ export default function (kit) {
   kit.cyl(0.2, 0.2, 0.05, '#e9e6df', 11.62, 1.5, -8.95).rotation.x = Math.PI / 2;
   const dial = kit.plane(0.3, 0.3, dialMat, 11.62, 1.5, -8.92);
   const thermoTip = () => !ha || !ha.thermostat ? 'Thermostat' : `Heating\nRoom ${ha.thermostat.current}° · target ${ha.thermostat.target}°\nMode: ${ha.thermostat.mode}${ha.thermostat.water ? ' · hot water ' + ha.thermostat.water : ''}`;
-  kit.tipOn(panel, thermoTip);
-  kit.tipOn(dial, thermoTip);
+  kit.tipOn(panel, thermoTip, 'homeassistant');
+  kit.tipOn(dial, thermoTip, 'homeassistant');
 
   // ---------- electricity price ticker above the door ----------
   const W = 768, H = 192;
@@ -58,7 +58,7 @@ export default function (kit) {
     if (!p) return 'Electricity price';
     const cheapest = (p.hourly || []).reduce((a, b) => (!a || b.p < a.p ? b : a), null);
     return `Electricity ${eur(p.now)} per kWh now\nToday: low ${eur(p.min)} · average ${eur(p.avg)} · high ${eur(p.max)}${cheapest ? '\nCheapest coming hour: ' + hhmm(cheapest.t) + ' (' + eur(cheapest.p) + ')' : ''}`;
-  });
+   }, 'homeassistant');
 
   // ---------- the office lamps follow the living room ----------
   const want = new THREE.Color('#ffc98a'), now = new THREE.Color('#ffc98a');

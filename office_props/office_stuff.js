@@ -37,8 +37,8 @@ export default function (kit) {
     g.font = `600 24px ${FONT}`; g.fillText(n ? `${gb(n.used)} of ${gb(n.total)}` : '…', w / 2, 72);
   });
   const cabSign = kit.plane(0.78, 0.29, new THREE.MeshStandardMaterial({ map: cabTex }), 0, 1.19, 0.0, 0, -Math.PI / 2, cab);
-  kit.tipOn(cabSign, () => !x.nextcloud ? 'Nextcloud' : `Nextcloud filing cabinet\n${gb(x.nextcloud.used)} used of ${gb(x.nextcloud.total)} (${x.nextcloud.percent}%)\n${x.nextcloud.users} accounts`);
-  kit.tipOn(cab.children[0], () => cabSign.userData.tip());
+  kit.tipOn(cabSign, () => !x.nextcloud ? 'Nextcloud' : `Nextcloud filing cabinet\n${gb(x.nextcloud.used)} used of ${gb(x.nextcloud.total)} (${x.nextcloud.percent}%)\n${x.nextcloud.users} accounts`, 'nextcloud');
+  kit.tipOn(cab.children[0], () => cabSign.userData.tip(), 'nextcloud');
 
   // ---------- BookOrbit: the bookshelf in the back-left corner ----------
   const shelf = kit.group(-11.55, 0, -8.1, undefined, Math.PI / 2);
@@ -69,7 +69,7 @@ export default function (kit) {
     m.visible = false;
     return { tex, m, book: null };
   });
-  covers.forEach((c) => kit.tipOn(c.m, () => !c.book ? 'BookOrbit' : `${c.book.title}\n${c.book.author}\nAdded ${ago(c.book.added)} · ${x.bookorbit.total} books in the library`));
+  covers.forEach((c) => kit.tipOn(c.m, () => !c.book ? 'BookOrbit' : `${c.book.title}\n${c.book.author}\nAdded ${ago(c.book.added)} · ${x.bookorbit.total} books in the library`, 'bookorbit'));
 
   // ---------- FreshRSS: newspapers on the coffee table ----------
   const papers = kit.group(6.4, 0.5, -6.2);
@@ -87,7 +87,7 @@ export default function (kit) {
   });
   const news = kit.plane(0.38, 0.285, new THREE.MeshStandardMaterial({ map: newsTex }), -0.04, 0.15, 0.18, 0, -Math.PI / 2, papers);
   news.visible = false;
-  kit.tipOn(news, () => !x.freshrss ? 'FreshRSS' : `FreshRSS\n${x.freshrss.unread.toLocaleString('en-GB')} unread articles\n${x.freshrss.feeds} feeds · ${x.freshrss.favourites} favourites`);
+  kit.tipOn(news, () => !x.freshrss ? 'FreshRSS' : `FreshRSS\n${x.freshrss.unread.toLocaleString('en-GB')} unread articles\n${x.freshrss.feeds} feeds · ${x.freshrss.favourites} favourites`, 'freshrss');
 
   // ---------- Seerr: the suggestion box on the kitchen counter ----------
   const box = kit.group(0.6, 0.95, -8.4);
@@ -99,8 +99,8 @@ export default function (kit) {
   kit.cyl(0.008, 0.008, 0.22, '#9aa0ad', 0, 0.11, 0, flag);
   const flagCloth = kit.box(0.12, 0.07, 0.01, '#e24b4b', 0.06, 0.2, 0, flag);
   const slips = Array.from({ length: 6 }, (_, i) => { const s = kit.box(0.1, 0.12, 0.004, '#ffffff', (i - 2.5) * 0.025, 0.36, 0, box); s.rotation.z = (i - 2.5) * 0.16; s.visible = false; return s; });
-  kit.tipOn(boxSign, () => !x.seerr ? 'Seerr' : `Suggestion box (Seerr)\n${x.seerr.pending} waiting for a yes · ${x.seerr.approved + x.seerr.processing} on the way · ${x.seerr.available} done\nNewest: ${x.seerr.latest.slice(0, 3).map((r) => r.title + ' (' + r.status + ')').join(', ') || 'nothing yet'}`);
-  kit.tipOn(box.children[0], () => boxSign.userData.tip());
+  kit.tipOn(boxSign, () => !x.seerr ? 'Seerr' : `Suggestion box (Seerr)\n${x.seerr.pending} waiting for a yes · ${x.seerr.approved + x.seerr.processing} on the way · ${x.seerr.available} done\nNewest: ${x.seerr.latest.slice(0, 3).map((r) => r.title + ' (' + r.status + ')').join(', ') || 'nothing yet'}`, 'seerr');
+  kit.tipOn(box.children[0], () => boxSign.userData.tip(), 'seerr');
 
   // ---------- Spaarpot: the piggy bank on the kitchen shelf ----------
   const pig = kit.group(2.95, 2.13, -8.68, undefined, 0.5);
@@ -113,7 +113,7 @@ export default function (kit) {
   kit.torus(0.03, 0.006, Math.PI * 1.5, '#e88aa3', -0.17, 0.17, 0, pig);
   kit.box(0.09, 0.008, 0.02, '#8a3a52', 0, 0.295, 0, pig);
   const coins = Array.from({ length: 6 }, (_, i) => { const c = kit.cyl(0.04, 0.04, 0.01, '#f2c94c', -0.02 + (i % 2) * 0.02, 0.005 + i * 0.011, 0.19, pig); c.visible = false; return c; });
-  kit.tipOn(body, () => !x.spaarpot ? 'Spaarpot' : `Piggy bank (Spaarpot)\n${x.spaarpot.count} wishes · €${x.spaarpot.total.toFixed(0)} in all\n${x.spaarpot.items.map((i) => i.title + ' €' + i.amount.toFixed(0)).join('\n')}`);
+  kit.tipOn(body, () => !x.spaarpot ? 'Spaarpot' : `Piggy bank (Spaarpot)\n${x.spaarpot.count} wishes · €${x.spaarpot.total.toFixed(0)} in all\n${x.spaarpot.items.map((i) => i.title + ' €' + i.amount.toFixed(0)).join('\n')}`, 'spaarpot');
 
   return {
     update(d) {

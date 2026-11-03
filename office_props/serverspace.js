@@ -15,6 +15,7 @@ export default function (kit) {
     color: '#f28c3a', trim: '#ffffff', pants: '#2f3a52', hair: '#3b2a20', style: 'short', skin: '#e8b994', extra: 'cap', eye: '#3f7fbf',
     quips: ['Containers all tidy', 'Have you tried restarting it?', 'docker ps, again'],
   }, { at: [-9.3, 7.3], face: -Math.PI / 2 });
+  engineer.link = 'docker';
   const crates = [];
   const crateColors = ['#4fa3e0', '#e0a84f', '#6fc08b', '#c27ad6', '#e07a5f'];
   const yard = kit.group(-8.95, FY, 8.55);
@@ -31,6 +32,7 @@ export default function (kit) {
     color: '#7c5cff', trim: '#ffffff', pants: '#2c2c3a', hair: '#2b2b38', style: 'bun', skin: '#c98e6a', extra: 'headphones', eye: '#3a2a4a',
     quips: ['Connecting you now…', 'Please hold', 'Everyone is on the line'],
   }, { at: [-8.2, 6.5], face: Math.PI });
+  operator.link = 'tailscale';
   const boardTex = kit.canvasTexture(512, 256, (g, w, h, t) => {
     g.fillStyle = '#1d1f2b'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#9aa0b4'; g.font = `700 26px ${FONT}`; g.textAlign = 'left';
@@ -106,9 +108,9 @@ export default function (kit) {
   // hover text
   engineer.say = () => !dock ? 'Docker\nCounting containers…' : `Docker engineer\n${dock.running} running · ${dock.created} created · ${dock.exited} stopped\n${dock.restarting.length + dock.unhealthy.length ? '⚠ needs attention: ' + [...dock.restarting, ...dock.unhealthy].join(', ') : dock.recently_changed ? 'Something just changed, checking it out' : 'All quiet'}\nNot running: ${dock.stopped.slice(0, 6).join(', ') || 'none'}`;
   operator.say = () => !tail ? 'Tailscale\nConnecting…' : `Tailscale operator\n${tail.online} of ${tail.total} devices on the line\n${tail.devices.filter((d) => d.active).length} talking right now`;
-  kit.tipOn(signPlane, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\n` + backup.jobs.map((j) => `${j.ok ? '✓' : '✗'} ${j.name}${j.last ? ' · ' + hhmm(j.last) + ' (' + ago(backup.now - j.last) + ')' : ''}${j.next ? ' · next ' + hhmm(j.next) : ''}`).join('\n'));
-  kit.tipOn(ring, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\nLast backup ${backup.last_ok ? hhmm(backup.last_ok) + ' (' + ago(backup.now - backup.last_ok) + ')' : 'never'}`);
-  kit.tipOn(fax.children[0], () => !tunnel ? 'Cloudflared' : `Cloudflared fax\n${tunnel.connections} tunnel connections · ${tunnel.errors} errors\n${tunnel.requests} requests handled since it started`);
+  kit.tipOn(signPlane, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\n` + backup.jobs.map((j) => `${j.ok ? '✓' : '✗'} ${j.name}${j.last ? ' · ' + hhmm(j.last) + ' (' + ago(backup.now - j.last) + ')' : ''}${j.next ? ' · next ' + hhmm(j.next) : ''}`).join('\n'), 'backups');
+  kit.tipOn(ring, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\nLast backup ${backup.last_ok ? hhmm(backup.last_ok) + ' (' + ago(backup.now - backup.last_ok) + ')' : 'never'}`, 'backups');
+  kit.tipOn(fax.children[0], () => !tunnel ? 'Cloudflared' : `Cloudflared fax\n${tunnel.connections} tunnel connections · ${tunnel.errors} errors\n${tunnel.requests} requests handled since it started`, 'cloudflared');
 
   return {
     update(d) {

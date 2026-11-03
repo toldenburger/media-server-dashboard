@@ -1349,27 +1349,51 @@ document.addEventListener('mouseover', (e) => {
 document.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('[data-person], [data-tip]')) hideTip(); });
 // pointing at a character in the room
 const ray = new THREE.Raycaster(), pointer = new THREE.Vector2();
+// Everything the pointer can point at in the room.
+const clickable = () => [...Object.values(people).filter((p) => p.root.visible).map((p) => p.root), ...parcels.filter((b) => b.visible), ...wallPosters.map((p) => p.mesh), ...pickables, boardScreen];
+// Which service an item belongs to (the key of "open" in config.json), so a double-click can open it.
+const SERVICE_LINK = { Movies: 'mediarium', TV: 'mediarium', Downloads: 'mediarium', Subtitles: 'mediarium', Indexers: 'mediarium', Immich: 'immich' };
+function linkOf(o, hit) {
+  if (hit && hit.object === boardScreen) return 'jellyfin';
+  if (!o) return null;
+  if (o.userData.person) return o.userData.person.link || SERVICE_LINK[o.userData.person.name] || null;
+  if (parcels.includes(o) || o.userData.poster) return 'mediarium';
+  return o.userData.link || null;
+}
+const hasLink = (key) => !!(key && latestData && latestData.links && latestData.links[key]);
+const withHint = (text, key) => (hasLink(key) ? text + '\n⤴ double-click to open' : text);
+renderer.domElement.addEventListener('dblclick', (e) => {
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.set((e.clientX - r.left) / r.width * 2 - 1, 1 - (e.clientY - r.top) / r.height * 2);
+  ray.setFromCamera(pointer, camera);
+  const hit = ray.intersectObjects(clickable(), true)[0];
+  let o = hit && hit.object;
+  while (o && !o.userData.person && !parcels.includes(o) && !o.userData.poster && !o.userData.tip && !o.userData.link) o = o.parent;
+  const key = linkOf(o, hit);
+  if (hasLink(key)) window.open(latestData.links[key], '_blank', 'noopener');
+});
 renderer.domElement.addEventListener('pointermove', (e) => {
   if (e.buttons) return hideTip();
   const r = renderer.domElement.getBoundingClientRect();
   pointer.set((e.clientX - r.left) / r.width * 2 - 1, 1 - (e.clientY - r.top) / r.height * 2);
   ray.setFromCamera(pointer, camera);
-  const hit = ray.intersectObjects([...Object.values(people).filter((p) => p.root.visible).map((p) => p.root), ...parcels.filter((b) => b.visible), ...wallPosters.map((p) => p.mesh), ...pickables, boardScreen], true)[0];
+  const hit = ray.intersectObjects(clickable(), true)[0];
   if (hit && hit.object === boardScreen) {
     const px = hit.uv.x * BOARD_W, py = (1 - hit.uv.y) * BOARD_H, viewers = board.viewers || [];
     const i = boardCircles(viewers.length).findIndex(({ cx, cy, r }) => Math.hypot(px - cx, py - cy) <= r + 4);
     const v = viewers[i];
     renderer.domElement.style.cursor = v && v.watching ? 'pointer' : '';
-    return v && v.watching ? showTip(`${v.name} is watching\n${v.title}`, e.clientX, e.clientY) : hideTip();
+    return v && v.watching ? showTip(withHint(`${v.name} is watching\n${v.title}`, 'jellyfin'), e.clientX, e.clientY) : hideTip();
   }
   let o = hit && hit.object;
-  while (o && !o.userData.person && !parcels.includes(o) && !o.userData.poster && !o.userData.tip) o = o.parent;
+  while (o && !o.userData.person && !parcels.includes(o) && !o.userData.poster && !o.userData.tip && !o.userData.link) o = o.parent;
   if (o && o.userData.poster === null) o = null;
+  const key = linkOf(o, hit);
   renderer.domElement.style.cursor = o ? 'pointer' : '';
-  if (o && o.userData.person) showTip(doing(o.userData.person), e.clientX, e.clientY);
-  else if (o && o.userData.poster) showTip(o.userData.poster, e.clientX, e.clientY);
-  else if (o && o.userData.tip) showTip(typeof o.userData.tip === 'function' ? o.userData.tip() : o.userData.tip, e.clientX, e.clientY);
-  else if (o) showTip(queueText(latestSab), e.clientX, e.clientY);
+  if (o && o.userData.person) showTip(withHint(doing(o.userData.person), key), e.clientX, e.clientY);
+  else if (o && o.userData.poster) showTip(withHint(o.userData.poster, key), e.clientX, e.clientY);
+  else if (o && o.userData.tip) showTip(withHint(typeof o.userData.tip === 'function' ? o.userData.tip() : o.userData.tip, key), e.clientX, e.clientY);
+  else if (o) showTip(withHint(queueText(latestSab), key), e.clientX, e.clientY);
   else hideTip();
 });
 renderer.domElement.addEventListener('pointerleave', hideTip);
@@ -1390,7 +1414,7 @@ const kit = {
     place(p, { pose: 'stand', ...spot });
     return p;
   },
-  tipOn(obj, tip) { obj.userData.tip = tip; if (!pickables.includes(obj)) pickables.push(obj); },
+  tipOn(obj, tip, link) { obj.userData.tip = tip; if (link) obj.userData.link = link; if (!pickables.includes(obj)) pickables.push(obj); },
 };
 fetch('/office_props/index.json').then((r) => r.json()).then((names) => names.forEach((n) => import(`/office_props/${n}.js`).then((m) => {
   const p = m.default(kit);

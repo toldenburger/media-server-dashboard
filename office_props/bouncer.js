@@ -7,6 +7,7 @@ export default function (kit) {
     color: '#1c1c24', trim: '#b8322f', pants: '#14141a', hair: '#0d0d10', style: 'short', skin: '#8a5a3b', extra: 'glasses', eye: '#2a1d14',
     quips: ['Nobody gets past me', 'Ads? Not tonight', 'Guest list checked'],
   }, { at: [-11.1, 1.45], face: 1.1 });
+  guard.link = 'pihole';
 
   // sandwich board
   const W = 360, H = 480;

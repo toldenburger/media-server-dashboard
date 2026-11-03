@@ -67,8 +67,8 @@ export default function (kit) {
     const l = data.last;
     return [`Record player: ${data.playing ? 'now spinning' : 'last played ' + ago(l.when, data.now)}`, `${l.album}`, `${l.artist} · ${l.title}${l.who ? ' (' + l.who + ')' : ''}`, '', 'Recent albums:', ...data.stack.map((s, i) => `${i + 1}. ${s.album} · ${s.artist} · ${ago(s.when, data.now)}`)].join('\n');
   };
-  kit.tipOn(top, tip);
-  kit.tipOn(player.children[0], tip);
+  kit.tipOn(top, tip, 'navidrome');
+  kit.tipOn(player.children[0], tip, 'navidrome');
 
   return {
     update(d) {

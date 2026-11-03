@@ -110,6 +110,13 @@ inside them (read through `ffmpeg` into memory; nothing is written to disk).
 - **Seerr**: a **suggestion box** on the kitchen counter; the flag goes up and a slip of paper appears for every request waiting for a yes.
 - **Spaarpot** (a small savings-wish-list app): a **piggy bank** on the kitchen shelf with a coin per wish; hover for the list.
 
+### Double-click to open
+
+Double-click almost anything in the office to open its service in a new tab: a worker or the parcel pile or a wall poster opens Mediarium, the
+bouncer opens Pi-hole, the filing cabinet opens Nextcloud, and so on. Hover text says "double-click to open" where it works. (A double-click, not
+a single click, so turning the room never opens a tab by accident.) Set the addresses your browser can reach in `config.json`, as `"open"` in each
+source and `"mediarium_open"` for Mediarium; items without one simply do nothing.
+
 ### Idle workers wander
 
 Workers who aren't busy no longer park in one spot: they stroll along the walkways between the couch, the coffee machine, the ping-pong table (a
