@@ -504,7 +504,7 @@ def payload():
     if sab.get("queue"):  # downloads by the name they'll have in the library
         sab = {**sab, "queue": [{**q, "name": download_titles.get((q.get("id") or "").lower()) or tidy(q["title"])} for q in sab["queue"]]}
     return json.dumps({
-        "title": TITLE, "now": int(time.time() * 1000), "alerts": issues, "history": {k: list(v) for k, v in history.items()},
+        "title": TITLE, "location": CONFIG.get("location"), "now": int(time.time() * 1000), "alerts": issues, "history": {k: list(v) for k, v in history.items()},
         "upcoming": upcoming, **state, "services": services, "sab": sab,
     })
 

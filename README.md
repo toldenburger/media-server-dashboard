@@ -108,7 +108,7 @@ Nobody shares a spot, and everyone stays a while before moving on.
 
    | Source | Needs |
    |---|---|
-   | BirdNET-Go | its address (default `http://localhost:8080`), no login |
+   | BirdNET-Go | its address (default `http://birdnet-go.local:8080`), no login |
    | Pi-hole v6 | its address, and its password in `secrets/pihole_password` |
    | Navidrome | the path of its `navidrome.db` and the folder its music library points to, no login |
    | Docker, Tailscale, Cloudflared, backups | nothing (see `config.example.json` for overrides) |

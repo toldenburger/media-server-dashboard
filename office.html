@@ -225,7 +225,7 @@ box(11.4, 1.0, 0.04, '#e9d9cc', 6.3, 0.62, -8.98); // wainscot in the break room
 box(11.4, 0.05, 0.08, '#d9c4b2', 6.3, 1.13, -8.96);
 
 // windows: frame, sill, mullions, a little sky
-// The sky follows the real sun over your location. ?hour=21 previews another time of day.
+// The sky follows the real sun over your location ("location": {"lat": .., "lon": ..} in config.json). ?hour=21 previews another time of day.
 let LAT = 52.37, LON = 4.9;
 const nowDate = () => { const h = new URLSearchParams(location.search).get('hour'); const d = new Date(); if (h !== null) d.setHours(Math.floor(+h), (+h % 1) * 60, 0, 0); return d; };
 function sunAltitude(d = nowDate()) {
@@ -1259,6 +1259,7 @@ function placeLabels() {
 let first = true;
 function render(d) {
   latestData = d;
+  if (d.location) { LAT = +d.location.lat; LON = +d.location.lon; }
   props.forEach((p) => p.update && p.update(d));
   d.services.forEach((svc, i) => {
     const p = people[svc.name] || (people[svc.name] = makePerson(svc.name, i % DESKS.length));

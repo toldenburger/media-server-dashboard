@@ -3,11 +3,22 @@
 Reads the systemd user units of the jobs (default: the three Hetzner restic jobs and Time Machine). Override with
 "sources": {"backups": {"jobs": [["Label", "unit-name-without-suffix"], ...]}} in config.json.
 """
+import re
 import time
 
 NAME = "backups"
 EVERY = 60
-JOBS = [["Immich", "immich-backup-hetzner"], ["iCloud", "icloud-backup-hetzner"], ["SSD", "ssd-backup-hetzner"], ["Time Machine", "time-machine@disk"]]
+KEYWORDS = ("backup", "time-machine", "restic", "borg")
+
+
+def discover(ctx):
+    """Every systemd user timer whose name looks like a backup job, as [label, unit]."""
+    jobs = []
+    for line in ctx.sh("/usr/bin/systemctl", "--user", "list-timers", "--all", "--no-legend", "--no-pager").splitlines():
+        unit = next((w[:-6] for w in line.split() if w.endswith(".timer")), "")
+        if unit and any(k in unit for k in KEYWORDS):
+            jobs.append([re.sub(r"[-_@]+", " ", unit).title()[:22], unit])
+    return jobs
 
 
 def show(ctx, unit, *props):
@@ -21,7 +32,7 @@ def when(text):
 
 def poll(ctx):
     jobs = []
-    for label, unit in ctx.config.get("jobs") or JOBS:
+    for label, unit in ctx.config.get("jobs") or discover(ctx):
         svc = show(ctx, unit + ".service", "Result", "ExecMainStatus", "ExecMainExitTimestamp", "ActiveState")
         tim = show(ctx, unit + ".timer", "NextElapseUSecRealtime", "LastTriggerUSec")
         last = when(svc.get("ExecMainExitTimestamp", "")) or when(tim.get("LastTriggerUSec", ""))
