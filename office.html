@@ -1277,6 +1277,7 @@ async function tick() {
 const tip = $('tip');
 const BREAK_TEXT = { couch: 'Relaxing on the couch', pingpong: 'Playing ping pong', coffee: 'Having a coffee', beanbag: 'Chilling on a bean bag' };
 function doing(p) {
+  if (p.say) return typeof p.say === 'function' ? p.say() : p.say;
   if (!p.up) return `${p.name}\nNot running` + (p.issue ? `\n⚠ ${p.issue}` : '');
   const short = (t) => (t && t.length > 70 ? t.slice(0, 67).trimEnd() + '…' : t);
   let text = short(p.task) || (p.path.length ? (p.where === 'desk' ? 'Heading to the desk' : 'Heading to the break room') : BREAK_TEXT[p.pose?.pose] || 'On a break');
@@ -1331,6 +1332,15 @@ const kit = {
   THREE, scene, camera, add, mat, box, rbox, cyl, ball, capsule, torus, group, plane, canvasTexture, fitText,
   windows: WINDOWS, sky, skyMat, sunAltitude, nowDate, pickables,
   // hover text for a prop: a string, or a function giving one
+  // a standing character for a service that has no desk: spawn(label, look, {at: [x, z], face}, hoverText)
+  spawn(name, look, spot, say) {
+    STAFF[name] = look;
+    const p = makePerson(name, 0);
+    Object.assign(p, { up: true, say });
+    people[name] = p;
+    place(p, { pose: 'stand', ...spot });
+    return p;
+  },
   tipOn(obj, tip) { obj.userData.tip = tip; if (!pickables.includes(obj)) pickables.push(obj); },
 };
 fetch('/office_props/index.json').then((r) => r.json()).then((names) => names.forEach((n) => import(`/office_props/${n}.js`).then((m) => {

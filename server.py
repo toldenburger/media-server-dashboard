@@ -511,7 +511,7 @@ def payload():
 
 # ---------- sources: one small module per extra service (see sources/README.md) ----------
 SOURCES = {}
-SECRETS_DIR = os.path.join(HERE, "secrets")  # one file per secret, mode 600, never committed
+SECRETS_DIR = os.path.expanduser(CONFIG.get("secrets_dir") or os.path.join(HERE, "secrets"))  # one file per secret, mode 600, never committed
 
 
 def secret(name):
