@@ -14,7 +14,7 @@ export default function (kit) {
   const engineer = kit.spawn('Docker', {
     color: '#f28c3a', trim: '#ffffff', pants: '#2f3a52', hair: '#3b2a20', style: 'short', skin: '#e8b994', extra: 'cap', eye: '#3f7fbf',
     quips: ['Containers all tidy', 'Have you tried restarting it?', 'docker ps, again'],
-  }, { at: [-9.3, 7.3], face: -Math.PI / 2 });
+  }, { at: [-8.95, 7.75], face: 0 });
   engineer.link = 'docker';
   const crates = [];
   const crateColors = ['#4fa3e0', '#e0a84f', '#6fc08b', '#c27ad6', '#e07a5f'];
@@ -26,6 +26,21 @@ export default function (kit) {
     crates.push(c);
   }
   let dock = null;
+  const yardTex = kit.canvasTexture(256, 128, (g, w, h, d) => {
+    g.fillStyle = '#1d1f2b'; g.fillRect(0, 0, w, h); g.textAlign = 'left';
+    g.fillStyle = '#f2c94c'; g.font = `800 22px ${FONT}`; g.fillText('CONTAINER YARD', 14, 30);
+    if (!d) { g.fillStyle = '#9aa0b4'; g.font = `600 22px ${FONT}`; g.fillText('counting…', 14, 76); return; }
+    g.fillStyle = '#4ade80'; g.font = `800 40px ${FONT}`; g.fillText(`${d.running} up`, 14, 78);
+    g.fillStyle = d.unhealthy.length || d.restarting.length ? '#ff6b6b' : '#9aa0b4'; g.font = `600 22px ${FONT}`;
+    g.fillText(d.unhealthy.length || d.restarting.length ? `${d.unhealthy.length + d.restarting.length} need help` : `${d.created + d.exited} stopped (grey)`, 14, 112);
+  });
+  const yardSign = kit.group(-7.55, FY, 8.5, undefined, 0.5);
+  kit.box(0.04, 0.34, 0.04, '#9aa0ad', 0, 0.17, 0, yardSign);
+  kit.rbox(0.62, 0.32, 0.03, 0.02, '#3a3f50', 0, 0.46, 0, yardSign).rotation.x = -0.25;
+  const yardPlane = kit.plane(0.58, 0.29, new THREE.MeshStandardMaterial({ map: yardTex, emissiveMap: yardTex, emissive: '#ffffff', emissiveIntensity: 0.6 }), 0, 0.462, 0.022, 0, -0.25, yardSign);
+  const yardLid = kit.box(2.3, 0.26, 0.95, '#000000', 0, 0.12, 0, yard);
+  yardLid.material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+  yardLid.castShadow = false;
 
   // ---------- Tailscale: switchboard and devices ----------
   const operator = kit.spawn('Tailscale', {
@@ -106,7 +121,10 @@ export default function (kit) {
   let backup = null;
 
   // hover text
-  engineer.say = () => !dock ? 'Docker\nCounting containers…' : `Docker engineer\n${dock.running} running · ${dock.created} created · ${dock.exited} stopped\n${dock.restarting.length + dock.unhealthy.length ? '⚠ needs attention: ' + [...dock.restarting, ...dock.unhealthy].join(', ') : dock.recently_changed ? 'Something just changed, checking it out' : 'All quiet'}\nNot running: ${dock.stopped.slice(0, 6).join(', ') || 'none'}`;
+  const yardTip = () => engineer.say();
+  kit.tipOn(yardLid, yardTip, 'docker');
+  kit.tipOn(yardPlane, yardTip, 'docker');
+  engineer.say = () => !dock ? 'Docker\nCounting containers…' : `Docker engineer, tending the container yard (one crate per container)\n${dock.running} running · ${dock.created} created · ${dock.exited} stopped\n${dock.restarting.length + dock.unhealthy.length ? '⚠ needs attention: ' + [...dock.restarting, ...dock.unhealthy].join(', ') : dock.recently_changed ? 'Something just changed, checking it out' : 'All quiet'}\nNot running: ${dock.stopped.slice(0, 6).join(', ') || 'none'}`;
   operator.say = () => !tail ? 'Tailscale\nConnecting…' : `Tailscale operator\n${tail.online} of ${tail.total} devices on the line\n${tail.devices.filter((d) => d.active).length} talking right now`;
   kit.tipOn(signPlane, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\n` + backup.jobs.map((j) => `${j.ok ? '✓' : '✗'} ${j.name}${j.last ? ' · ' + hhmm(j.last) + ' (' + ago(backup.now - j.last) + ')' : ''}${j.next ? ' · next ' + hhmm(j.next) : ''}`).join('\n'), 'backups');
   kit.tipOn(ring, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\nLast backup ${backup.last_ok ? hhmm(backup.last_ok) + ' (' + ago(backup.now - backup.last_ok) + ')' : 'never'}`, 'backups');
@@ -117,6 +135,7 @@ export default function (kit) {
       const x = d.extra || {};
       if (x.docker && x.docker.ok) {
         dock = x.docker;
+        yardTex.redraw(dock);
         crates.forEach((c, i) => {
           const name = i < dock.running ? 'run' : i < dock.running + dock.created + dock.exited ? 'off' : null;
           c.visible = !!name;

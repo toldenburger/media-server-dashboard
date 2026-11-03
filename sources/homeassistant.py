@@ -3,7 +3,8 @@
 Needs secrets/ha_token (a long-lived access token) and in config.json, for example:
   "sources": {"homeassistant": {"url": "http://localhost:8123", "climate": "climate.living_room", "price": "sensor.electricity_price",
                                 "price_forecast": "sensor.price_forecast", "light_prefix": "light.living_room"}}
-Every entity is optional; what is not set is left out.
+Every entity is optional; what is not set is left out. For a heat pump you can name "compressor" (a sensor above 0 while it runs) and/or
+"heat_power" (its heat output in kW); the radiator then glows while the pump really heats, instead of when the room is merely below its target.
 """
 from datetime import datetime
 
@@ -23,6 +24,14 @@ def poll(ctx):
         w = states.get(cfg.get("water_heater") or "")
         if w:
             out["thermostat"]["water"] = w["state"]
+        # Is the room being heated? Best from the heat pump itself (compressor running or heat output above zero); otherwise the room being below its target.
+        num = lambda key: next((float(s["state"]) for s in [states.get(cfg.get(key) or "")] if s and s["state"] not in ("unknown", "unavailable", "")), None)
+        compressor, power = num("compressor"), num("heat_power")
+        t = out["thermostat"]
+        if compressor is not None or power is not None:
+            t["heating"] = (compressor or 0) > 0 or (power or 0) > 0.05
+        else:
+            t["heating"] = c["state"] == "heat" and None not in (t["target"], t["current"]) and t["target"] > t["current"] + 0.1
     p = states.get(cfg.get("price") or "")
     if p and p["state"] not in ("unknown", "unavailable"):
         a = p["attributes"]

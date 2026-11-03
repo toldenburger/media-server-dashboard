@@ -15,12 +15,18 @@ export default function (kit) {
   for (let i = 0; i < 9; i++) kit.box(0.025, 0.5, 0.1, '#d8d4cb', -0.56 + i * 0.14, 0.62, 0.01, rad);
   kit.cyl(0.025, 0.025, 0.2, '#c9ced6', -0.7, 0.2, 0.02, rad);
   kit.cyl(0.025, 0.025, 0.2, '#c9ced6', 0.7, 0.2, 0.02, rad);
+  const haloTex = kit.canvasTexture(256, 128, (g, w, h) => {
+    const gr = g.createRadialGradient(w / 2, h / 2, 6, w / 2, h / 2, w / 2);
+    gr.addColorStop(0, 'rgba(255,150,70,0.85)'); gr.addColorStop(0.5, 'rgba(255,130,60,0.3)'); gr.addColorStop(1, 'rgba(255,120,50,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  });
+  const halo = kit.plane(2.7, 1.35, new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }), 10.6, 0.65, -8.93);
+  let heating = false, radGlow = 0;  // glow eases towards 1 while the room is being heated and back to 0 after
   const dialTex = kit.canvasTexture(160, 160, (g, w, h, t) => {
     g.fillStyle = '#1d1f2b'; g.fillRect(0, 0, w, h);
     g.textAlign = 'center';
     if (!t) { g.fillStyle = '#9aa0b4'; g.font = `600 26px ${FONT}`; g.fillText('…', w / 2, h / 2 + 8); return; }
-    const heating = t.mode === 'heat' && t.target != null && t.current != null && t.target > t.current + 0.1;
-    g.strokeStyle = heating ? '#ff9b4a' : '#4ade80'; g.lineWidth = 8; g.beginPath(); g.arc(w / 2, h / 2, 68, 0, 7); g.stroke();
+    g.strokeStyle = t.heating ? '#ff9b4a' : '#4ade80'; g.lineWidth = 8; g.beginPath(); g.arc(w / 2, h / 2, 68, 0, 7); g.stroke();
     g.fillStyle = '#ffffff'; g.font = `800 50px ${FONT}`; g.fillText(t.current != null ? t.current.toFixed(1) + '°' : '--', w / 2, h / 2 + 12);
     g.fillStyle = '#9aa0b4'; g.font = `600 22px ${FONT}`; g.fillText(t.target != null ? '→ ' + t.target.toFixed(1) + '°' : '', w / 2, h / 2 + 44);
   });
@@ -71,11 +77,16 @@ export default function (kit) {
       dialTex.redraw(ha && ha.thermostat); tickerTex.redraw(ha && ha.price);
       if (ha && ha.thermostat) {
         const t = ha.thermostat;
-        panelMat.emissiveIntensity = t.mode === 'heat' && t.target > t.current + 0.1 ? 0.55 : 0;
+        heating = !!t.heating;
       }
       if (ha && ha.lamps) { want.setRGB(ha.lamps.rgb[0] / 255, ha.lamps.rgb[1] / 255, ha.lamps.rgb[2] / 255); brightness = ha.lamps.on ? ha.lamps.brightness : 0.08; }
     },
-    frame(dt) {
+    frame(dt, t) {
+      // eases in and out over a few seconds, then breathes slowly (about one breath every 4.5 s)
+      radGlow += ((heating ? 1 : 0) - radGlow) * Math.min(1, dt * 0.7);
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.4);
+      panelMat.emissiveIntensity = radGlow * (0.34 + 0.4 * breath);
+      halo.material.opacity = radGlow * (0.3 + 0.36 * breath);
       const k = Math.min(1, dt * 1.5);
       now.lerp(want, k); shown += (brightness - shown) * k;
       const { glow, shades } = kit.lamps;
