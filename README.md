@@ -86,12 +86,19 @@ None of these need credentials; they read local state only.
 
 ### The record player (Navidrome)
 
-![The record player in the front corner](docs/screenshots/record_player.png)
+![The record player on the left edge of the beanbag corner](docs/screenshots/record_player.png)
 
-A little table in the front corner (so you look at it from behind) holds a turntable and a stack of the albums you played lately, with the newest
+A little table on the left edge of the beanbag corner (so you look at it from behind) holds a turntable and a stack of the albums you played lately, with the newest
 cover on top. The record spins while something is playing; hover the stack for the track, the artist and the last few albums. It reads
 [Navidrome](https://www.navidrome.org)'s own database **read-only**, so it needs no login or API key, and it finds cover art next to the music files or
 inside them (read through `ffmpeg` into memory; nothing is written to disk).
+
+### The gaming nook (Sunshine)
+
+On the right edge of the beanbag corner a TV on a low cabinet and a game console wait for a stream from [Sunshine](https://github.com/LizardByte/Sunshine)
+(the game-streaming host you use with Moonlight). It sleeps on a "ready" screen and wakes up when someone streams: the screen shows what is
+streaming, to which device and for how long, and the console light pulses. Hover it for the paired devices and how often you streamed this week.
+It reads Sunshine's own log, read-only and without a login, so there is no worker for it: the room just lights up when it is in use.
 
 ### More of your home in the room
 
@@ -118,8 +125,10 @@ A working agent sits and types; an idle one takes a break like everyone else.
 
 When an agent **needs you** (Claude Code is waiting for an approval or an answer), a **red light blinks on its desk**, the agent raises a hand and
 waves, and its label gets the usual "!" badge. This reads the status file each Claude Code session already keeps in `~/.claude/sessions`, so no
-hooks or settings are touched; OpenCode agents show up and work but do not ask for attention yet. The idea of a character that gets your
-attention comes from [clalt](https://github.com/dhitalkamal/clalt), which draws Claude agents in a 3D office of its own. Session names are only
+hooks or settings are touched. OpenCode agents ask for attention too: the source asks OpenCode's own local server whether a session is working,
+or has an approval or a question waiting (it needs the password OpenCode keeps in `~/.local/state/opencode/service.json`; it is read at every poll,
+only sent to a loopback address, and only GET requests are made; set `"opencode_api": false` for the `agents` source to turn this off). The idea
+of a character that gets your attention comes from [clalt](https://github.com/dhitalkamal/clalt), which draws Claude agents in a 3D office of its own. Session names are only
 shown to logged-in viewers.
 
 ### Double-click to open

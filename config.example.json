@@ -14,6 +14,8 @@
     "pihole": { "url": "http://pi.hole" },
     "navidrome": { "db": "/path/to/navidrome/data/navidrome.db", "music_root": "/path/to/your/music", "launch": "my_music_app" },
     "cloudflared": { "url": "http://127.0.0.1:20241" },
+    "sunshine": { "folder": "~/.config/sunshine", "open": "https://<an address your browser can reach>:47990" },
+    "agents": { "slots": 3, "opencode_api": true },
     "backups": { "jobs": [["Label shown on the vault", "name-of-a-systemd-user-unit-without-.service"]] },
     "jellyfin": { "url": "http://127.0.0.1:8096", "open": "http://<an address your browser can reach>:8096" },
     "immich": { "url": "http://127.0.0.1:2283" },
