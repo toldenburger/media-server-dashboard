@@ -131,18 +131,33 @@ export default function (kit) {
   }
 
   let birds = [], shownKey = '', latest = '';
-  const clockOf = (iso) => (iso ? String(iso).slice(0, 16).replace('T', ' ') : 'earlier');
+  const clockOf = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'earlier');
 
-  function rebuild(flock) {
+  // the rare visitor of the week is gold, with a soft glow; it takes the place of its species in the flock, or the top of the tree
+  const GOLD = { back: '#f2c230', belly: '#ffe27a', head: '#f7d44a', cap: '#e8a820', wing: '#c9971c', tail: '#c9971c', beak: '#e0762a' };
+  const haloTex = kit.canvasTexture(64, 64, (g) => { const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30); gr.addColorStop(0, 'rgba(255,225,110,0.9)'); gr.addColorStop(1, 'rgba(255,225,110,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
+  const RARE_PERCH = () => [-0.2, topAt(-0.2, 0.9), 0.9];
+
+  function rebuild(flock, rare) {
     birds.forEach((b) => tree.remove(b.g));
-    birds = flock.slice(0, PERCH.length).map((f, i) => {
-      const pos = PERCH[i]();
-      const parts = makeBird(lookOf(f.name), tree);
+    const spots = flock.slice(0, PERCH.length).map((f, i) => ({ f, pos: PERCH[i](), i, gold: !!rare && f.name === rare.name }));
+    if (rare && !spots.some((x) => x.gold)) spots.push({ f: { name: rare.name, scientific: rare.scientific, count: 0 }, pos: RARE_PERCH(), i: spots.length, gold: true });
+    birds = spots.map(({ f, pos, i, gold }) => {
+      const parts = makeBird(gold ? GOLD : lookOf(f.name), tree);
       parts.g.position.set(pos[0], pos[1], pos[2]);
       const baseY = pos[1], phase = rand() * 6;
       parts.g.rotation.y = i % 2 ? Math.PI : 0.5;
-      kit.tipOn(parts.g, () => `${f.name}\n${f.scientific}\nheard ${f.count}× today · last ${f.last_heard || 'earlier'}\n${i < 2 ? 'At the feeder' : 'In the tree'}`, 'birdnet');
-      return { ...parts, f, i, baseY, phase, hop: -9, nextHop: 3 + rand() * 8, face: parts.g.rotation.y, feeder: i < 2 };
+      let halo = null;
+      if (gold) {
+        halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        halo.scale.setScalar(1.3); halo.position.set(0, 0.4, 0);
+        parts.g.add(halo);
+      }
+      const where = i < 2 && !gold ? 'At the feeder' : 'In the tree';
+      kit.tipOn(parts.g, () => gold
+        ? `${rare.kind === 'new' ? 'New species' : 'Rare visitor'} this week: ${rare.name}\n${rare.scientific}\n${rare.kind === 'new' ? 'First time heard here' : 'Infrequent visitor'} · ${clockOf(rare.when)} · ${Math.round((rare.confidence || 0) * 100)}% sure`
+        : `${f.name}\n${f.scientific}\nheard ${f.count}× today · last ${f.last_heard || 'earlier'}\n${where}`, 'birdnet');
+      return { ...parts, f, i, baseY, phase, halo, hop: -9, nextHop: 3 + rand() * 8, face: parts.g.rotation.y, feeder: i < 2 && !gold };
     });
   }
 
@@ -154,8 +169,9 @@ export default function (kit) {
     update(d) {
       const b = d.extra && d.extra.birdnet;
       const flock = (b && b.ok && (b.flock || (b.top ? [{ name: b.top.name, scientific: b.top.scientific, count: b.top.count, last_heard: b.top.last_heard }] : []))) || [];
-      const key = JSON.stringify(flock.map((f) => [f.name, f.count]));
-      if (key !== shownKey) { shownKey = key; rebuild(flock); }
+      const rare = b && b.ok && b.rare && b.rare.this_week ? b.rare : null;
+      const key = JSON.stringify([flock.map((f) => [f.name, f.count]), rare && [rare.name, rare.when]]);
+      if (key !== shownKey) { shownKey = key; rebuild(flock, rare); }
       const now = b && b.latest && b.latest.name;
       if (now && now !== latest) {  // the bird that was just heard hops
         if (latest) { const hit = birds.find((x) => x.f.name === now); if (hit) hit.hop = -0.0001; }
@@ -165,6 +181,7 @@ export default function (kit) {
     frame(dt, t) {
       birds.forEach((b) => {
         b.tail.rotation.z = -0.3 + Math.sin(t * 2 + b.phase) * 0.05;
+        if (b.halo) b.halo.material.opacity = 0.55 + 0.35 * Math.sin(t * 2.2);
         if (b.feeder) b.head.rotation.z = -0.55 * Math.max(0, Math.sin(t * 2.4 + b.phase)) ** 6;
         else b.head.rotation.y = Math.sin(t * 0.7 + b.phase) > 0.85 ? Math.sin(t * 6) * 0.5 : 0;
         if (b.hop < -1 && t > b.nextHop) { b.hop = t; b.nextHop = t + 6 + rand() * 12; if (rand() < 0.5) b.face += Math.PI; }

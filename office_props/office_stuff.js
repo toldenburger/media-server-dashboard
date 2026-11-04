@@ -20,7 +20,7 @@ export default function (kit) {
   };
   const x = {};  // the latest data of each source
 
-  // ---------- Nextcloud: the filing cabinet under the whiteboard ----------
+  // ---------- Nextcloud: the filing cabinet under the pinboard ----------
   const cab = kit.group(-11.4, 0, -2.4, undefined, Math.PI / 2);
   kit.rbox(0.9, 1.15, 0.55, 0.04, '#8d97a8', 0, 0.6, 0, cab);
   const drawers = [0, 1, 2].map((i) => {

@@ -31,7 +31,10 @@
     "nextcloud": { "container": "nextcloud", "user": "your-nextcloud-user" },
     "freshrss": { "container": "freshrss", "user": "your-freshrss-user" },
     "bookorbit": { "container": "bookorbit-db" },
-    "spaarpot": { "db": "/path/to/spaarpot.db" }
+    "spaarpot": { "db": "/path/to/spaarpot.db" },
+    "headphones": { "db": "/path/to/headphones/config/headphones.db", "open": "http://<an address your browser can reach>:8181" },
+    "linkwarden": { "container": "linkwarden-db", "user": "linkwarden", "database": "linkwarden", "open": "http://<an address your browser can reach>:3010" },
+    "opodsync": { "db": "/path/to/opodsync/data/data.sqlite", "open": "http://<an address your browser can reach>:8765" }
   },
   "sources_off": []
 }

@@ -15,7 +15,7 @@ the health of a whole server at a glance, from across the room, without reading 
 - the **look**: soft rounded blocks, warm wood floors, little people with real personalities, a ping-pong rally in the break room. It feels like a
   toy, not a monitoring tool, and that is exactly why you actually want to keep it open;
 - the **details**: parcels pile up as the download queue grows, the newest movies hang on the wall as framed posters, the data-center racks light
-  up with CPU, memory, network and drive use, and the whiteboard draws live graphs;
+  up with CPU, memory, network and drive use;
 - the **restraint**: standard-library Python, one vendored copy of three.js, no accounts, no analytics, nothing phoning home.
 
 Everything below is built on that foundation. If you like this, go give the original a star.
@@ -60,6 +60,8 @@ If you run [BirdNET-Go](https://github.com/tphakala/birdnet-go), a tree made of 
 pixel birds, the two busiest at the feeder, the rest on the branches and on top of the leaves. Each species gets its own colours (robin, blue tit, great tit,
 blackbird, sparrow, magpie, finches, starling, crows and a few more, in English and Dutch; anything else gets a colour made from its name). They preen, peck
 at the feeder and hop around, and the bird that was heard most recently hops. Hover one for its name and count; double-click opens BirdNET-Go.
+A **rare visitor** (BirdNET-Go's own *new species* or *infrequent species* alert from the last week) is a **gold bird** with a soft glow, in the
+tree even when it is not among today's busiest.
 
 ### The Pi-hole bouncer
 
@@ -98,6 +100,17 @@ On the right edge of the beanbag corner a TV on a low cabinet and a game console
 (the game-streaming host you use with Moonlight). It sleeps on a "ready" screen and wakes up when someone streams: the screen shows what is
 streaming, to which device and for how long, and the console light pulses. Hover it for the paired devices and how often you streamed this week.
 It reads Sunshine's own log, read-only and without a login, so there is no worker for it: the room just lights up when it is in use.
+
+### Headphones, Linkwarden and podcasts
+
+- **Headphones** (the music downloader): a **record crate** beside the record player, with a sleeve for every album that arrived lately (the newest
+  leans forward showing its cover). A **DJ with headphones** looks after it, flips through the crate while an album is on its way, and nods along
+  while the record player plays. Hover for what is downloaded, arriving and wanted. Read from Headphones' own database, no API key.
+- **Linkwarden** (bookmarks): a **cork pinboard** on the left wall with a sticky note for each of the newest saved links. When a new link is saved,
+  from the web app or from your phone, a **librarian** walks to the board and pins a note, then walks back to his book cart. Hover for the latest titles.
+- **Opodsync** (podcast sync): a **radio on a cabinet** at the front edge, with the cover of the podcast episode your apps played last standing next
+  to it. The display shows the podcast, the episode, how far you got and how long ago; the ON AIR light and floating notes are on while something was
+  played in the last twenty minutes. The episode title and cover come from the podcast's own public feed, which the dashboard fetches (at most once an hour).
 
 ### More of your home in the room
 
@@ -165,6 +178,8 @@ Nobody shares a spot, and everyone stays a while before moving on.
    | Home Assistant | its address, a long-lived token in `secrets/ha_token`, and the entity ids to show (see `config.example.json`) |
    | Seerr | its address and its API key in `secrets/seerr_key` |
    | Nextcloud, FreshRSS, BookOrbit | the Docker container names; they are read with `docker exec`, no login |
+   | Linkwarden | the name of its Postgres container (read with `docker exec`, a plain select, no token) |
+   | Headphones, Opodsync | the path of their database files (SQLite, read-only) |
    | Spaarpot | the path of its SQLite file |
    | Docker, Tailscale, Cloudflared, backups | nothing (see `config.example.json` for overrides) |
 
@@ -179,6 +194,8 @@ Nobody shares a spot, and everyone stays a while before moving on.
 - Everything is read-only: the dashboard only sends GET requests to the services it watches (plus the logins Pi-hole and Mediarium require).
 - API keys and passwords are read on the server and never sent to the browser. `config.json`, `password.txt`, `.secret`, `mediarium_api_key`,
   `secrets/`, `stats.json` and logs are all in `.gitignore`.
+- The Opodsync radio makes the server fetch the public feed and cover image of the podcast you played last (only real web addresses, never
+  anything on your own network).
 - The browser loads poster images from TMDB/TheTVDB; bird photos and everything else are fetched by the server. There is one ping to 1.1.1.1 every 30
   seconds for the "internet" indicator.
 - Only expose it on a private network (localhost, Tailscale, a LAN). It has a login, but it speaks plain HTTP.

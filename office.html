@@ -334,7 +334,7 @@ function showPosters(items) {
   });
 }
 
-// left wall: door, movie posters, clock (the status whiteboard is further down)
+// left wall: door, movie posters, clock (the cork pinboard is further down)
 rbox(0.12, 2.5, 1.7, 0.03, '#fbfaf6', -11.95, 1.25, 4.1);
 rbox(0.06, 2.3, 1.5, 0.02, '#efe9df', -11.88, 1.2, 4.1);
 ball(0.06, '#c9a24b', -11.82, 1.15, 3.55);
@@ -349,7 +349,7 @@ function poster(z, top, bottom, emoji) {
   plane(0.95, 1.33, new THREE.MeshStandardMaterial({ map: tex }), -11.92, 2.0, z, Math.PI / 2);
 }
 // (the two small posters that used to hang here made room for the Immich photo frames)
-// a big digital clock, centred between the whiteboard and the door
+// a big digital clock, centred between the pinboard and the door
 const clockFace = canvasTexture(512, 200, (g, w, h, text) => {
   g.fillStyle = '#141a2e'; g.fillRect(0, 0, w, h);
   g.fillStyle = '#eef2ff'; g.font = '600 150px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -387,7 +387,7 @@ function monstera(x, z, s = 1) {
     leaf.rotation.x = 0.5;
   }
 }
-bush(-11.3, -5.6); snake(-0.95, -8.5, 0.7); monstera(11.45, -6.6, 1.1); bush(6.2, 8.45, 1.0); snake(-0.2, 8.4, 1.1); monstera(11.3, 1.4, 0.9); bush(-11.3, 3.4, 0.8);
+bush(-11.3, -5.6); snake(-0.95, -8.5, 0.7); monstera(11.45, -6.6, 1.1); bush(6.2, 8.45, 1.0); snake(-0.2, 8.4, 1.1); monstera(11.3, 1.4, 0.9);
 
 // ---------- break room ----------
 const rug = canvasTexture(512, 320, (g, w, h) => {
@@ -587,56 +587,12 @@ for (let i = 0; i < 12; i++) {
   parcels.push(p);
 }
 
-// ---------- status whiteboard on the left wall: live graphs for the Server ----------
+// ---------- number formats and the network scale shared by the server racks ----------
 const fmtBytes = (b) => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0, n = b || 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i < 2 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i]; };
 // network meters and graphs read full at 100 Mbit/s; faster bursts just peg them
 const NET_FULL = 100e6 / 8;
 const fmtMbit = (b) => { const m = (b || 0) * 8 / 1e6; return (m < 10 ? m.toFixed(1) : Math.round(m)) + ' Mbit/s'; };
-const WB_W = 2200, WB_H = 1000, WB_MUTED = '#7a8091';
-function spark(g, vals, x, y, w, h, color, max, fill = true) {
-  if (vals.length < 2) return;
-  const top = max || Math.max(1, ...vals);
-  const pts = vals.map((v, i) => [x + i / (vals.length - 1) * w, y + h - Math.min(1, v / top) * h]);
-  if (fill) {
-    g.beginPath(); g.moveTo(x, y + h); pts.forEach(([px, py]) => g.lineTo(px, py)); g.lineTo(x + w, y + h); g.closePath();
-    g.globalAlpha = 0.14; g.fillStyle = color; g.fill(); g.globalAlpha = 1;
-  }
-  g.strokeStyle = color; g.lineWidth = 7; g.lineJoin = g.lineCap = 'round'; g.beginPath();
-  pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py)));
-  g.stroke();
-}
-const wb = canvasTexture(WB_W, WB_H, (g, w, h, d) => {
-  g.fillStyle = '#fbfbfd'; g.fillRect(0, 0, w, h);
-  if (!d) return;
-  const font = (wt, px) => { g.font = `${wt} ${px}px -apple-system, Helvetica, sans-serif`; };
-  const PW = 490, GAP = 40, GH = 720;
-  const panel = (k, label, value, color) => {
-    const x = 60 + k * (PW + GAP), y = 50;
-    font(500, 42); g.fillStyle = WB_MUTED; g.fillText(label, x, y + 46);
-    font(650, 68); g.fillStyle = color; g.fillText(value, x, y + 124);
-    g.strokeStyle = '#e3e5ec'; g.lineWidth = 3;
-    for (const f of [0, 0.5, 1]) { g.beginPath(); g.moveTo(x, y + 170 + GH * f); g.lineTo(x + PW, y + 170 + GH * f); g.stroke(); }
-    return [x, y + 170, PW, GH];
-  };
-  spark(g, d.cpuHist, ...panel(0, 'CPU', d.cpu + '%', '#1fa38a'), '#1fa38a', 100);
-  spark(g, d.memHist, ...panel(1, 'Memory', `${Math.round(d.mem)}%`, '#3b7fd9'), '#3b7fd9', 100);
-  const mbit = (b) => { const m = (b || 0) * 8 / 1e6; return m < 10 ? m.toFixed(1) : String(Math.round(m)); };
-  const down = `↓ ${mbit(d.rx)}`;
-  const net = panel(2, 'Network · Mbit/s', down, '#e0961f');
-  font(650, 68); const dw = g.measureText(down).width;
-  g.fillStyle = '#d9508f'; g.fillText(`↑ ${mbit(d.tx)}`, net[0] + dw + 36, 50 + 124);
-  const netTop = NET_FULL;
-  spark(g, d.rxHist, ...net, '#e0961f', netTop);
-  spark(g, d.txHist, ...net, '#d9508f', netTop, false);
-  spark(g, d.diskHist, ...panel(3, 'Disk activity', `${fmtBytes(d.disk)}/s`, '#8a5fd9'), '#8a5fd9');
-});
-wb.anisotropy = 16;
-// frame, marker tray and the board itself, filling the wall between the small posters and the clock
-const WB_Z = -1.75, WB_Y = 1.85, WB_WIDTH = 5.5, WB_HEIGHT = 2.5;
-rbox(0.08, WB_HEIGHT + 0.14, WB_WIDTH + 0.14, 0.03, '#d7d9e0', -11.97, WB_Y, WB_Z);
-plane(WB_WIDTH, WB_HEIGHT, new THREE.MeshStandardMaterial({ map: wb, roughness: 0.45 }), -11.92, WB_Y, WB_Z, Math.PI / 2);
-rbox(0.16, 0.05, WB_WIDTH * 0.6, 0.02, '#c3c7d1', -11.86, WB_Y - WB_HEIGHT / 2 - 0.05, WB_Z);
-['#e05d5d', '#4f86e0', '#3fae7a'].forEach((c, i) => { const m = cyl(0.025, 0.025, 0.28, c, -11.84, WB_Y - WB_HEIGHT / 2 - 0.0, WB_Z - 1.2 + i * 0.4); m.rotation.x = Math.PI / 2; });
+// (the whiteboard with the Server's live graphs used to hang here; the cork pinboard prop took its place, the same numbers are on the racks)
 
 // ---------- data center: the Server itself, racks with live meters, drive monitors ----------
 const DC = { x0: -12, x1: -4.4, z0: 5.2, z1: 9 };
@@ -825,11 +781,6 @@ $('labels').append(dcTag);
 
 function updateBoard(d) {
   updateDataCenter(d);
-  const h = d.history, last = (a) => a[a.length - 1] || 0;
-  wb.redraw({
-    cpu: last(h.cpu), cpuHist: h.cpu.slice(-60), mem: last(h.mem), memHist: h.mem.slice(-60),
-    rx: last(h.rx), tx: last(h.tx), rxHist: h.rx.slice(-60), txHist: h.tx.slice(-60), disk: last(h.disk), diskHist: h.disk.slice(-60),
-  });
 }
 
 // ---------- people ----------
@@ -1452,6 +1403,8 @@ const kit = {
     place(p, { pose: 'stand', ...spot });
     return p;
   },
+  // walk a person along points [[x, z], ...] and leave them standing at spot {at, face} (see the librarian in pinboard.js)
+  go(p, points, spot) { p.path = points.map(([x, z]) => new THREE.Vector3(x, 0, z)); p.pose = null; p.arrive = { pose: 'stand', ...spot }; },
   // widen the framing for props outside the room: extendView([[x, y, z], ...])
   extendView(points) { points.forEach(([x, y, z]) => ROOM_CORNERS.push(new THREE.Vector3(x, y, z))); fitView(); },
   tipOn(obj, tip, link) { obj.userData.tip = tip; if (link) obj.userData.link = link; if (!pickables.includes(obj)) pickables.push(obj); },
