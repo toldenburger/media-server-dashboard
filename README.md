@@ -129,6 +129,11 @@ bouncer opens Pi-hole, the filing cabinet opens Nextcloud, and so on. Hover text
 a single click, so turning the room never opens a tab by accident.) Set the addresses your browser can reach in `config.json`, as `"open"` in each
 source and `"mediarium_open"` for Mediarium; items without one simply do nothing.
 
+An item can also start a **desktop app** instead: the record player brings NaviBeat to the front (or starts it) when you double-click it while sitting
+at this computer, and opens the Navidrome web page when you are looking from another device. The page only sends the app's name; the command lives in
+`config.json` (`"launch"` plus `"launch": "<name>"` on the source), the request needs your login, and it is only honoured for a viewer on this
+machine. It talks to Hyprland (`hyprctl`) to focus or start the window.
+
 ### Idle workers wander
 
 Workers who aren't busy no longer park in one spot: they stroll along the walkways between the couch, the coffee machine, the ping-pong table (a

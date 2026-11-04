@@ -1391,7 +1391,7 @@ function linkOf(o, hit) {
   if (parcels.includes(o) || o.userData.poster) return 'mediarium';
   return o.userData.link || null;
 }
-const hasLink = (key) => !!(key && latestData && latestData.links && latestData.links[key]);
+const hasLink = (key) => !!(key && latestData && ((latestData.links && latestData.links[key]) || (latestData.launch && latestData.launch[key])));
 const withHint = (text, key) => (hasLink(key) ? text + '\n⤴ double-click to open' : text);
 renderer.domElement.addEventListener('dblclick', (e) => {
   const r = renderer.domElement.getBoundingClientRect();
@@ -1401,6 +1401,13 @@ renderer.domElement.addEventListener('dblclick', (e) => {
   let o = hit && hit.object;
   while (o && !o.userData.person && !parcels.includes(o) && !o.userData.poster && !o.userData.tip && !o.userData.link) o = o.parent;
   const key = linkOf(o, hit);
+  const app = key && latestData && latestData.launch && latestData.launch[key];
+  if (app) {  // a desktop app: the server brings it to the front when you are at this computer, otherwise the web page opens
+    fetch('/api/launch/' + encodeURIComponent(app), { method: 'POST', headers: { 'X-Office': '1' } })
+      .then((r) => { if (!r.ok && latestData.links && latestData.links[key]) window.open(latestData.links[key], '_blank', 'noopener'); })
+      .catch(() => { if (latestData.links && latestData.links[key]) window.open(latestData.links[key], '_blank', 'noopener'); });
+    return;
+  }
   if (hasLink(key)) window.open(latestData.links[key], '_blank', 'noopener');
 });
 renderer.domElement.addEventListener('pointermove', (e) => {

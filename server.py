@@ -514,7 +514,7 @@ def payload():
     if sab.get("queue"):  # downloads by the name they'll have in the library
         sab = {**sab, "queue": [{**q, "name": download_titles.get((q.get("id") or "").lower()) or tidy(q["title"])} for q in sab["queue"]]}
     return json.dumps({
-        "title": TITLE, "location": CONFIG.get("location"), "links": LINKS, "now": int(time.time() * 1000), "alerts": issues, "history": {k: list(v) for k, v in history.items()},
+        "title": TITLE, "location": CONFIG.get("location"), "links": LINKS, "launch": LAUNCHES, "now": int(time.time() * 1000), "alerts": issues, "history": {k: list(v) for k, v in history.items()},
         "upcoming": upcoming, **state, "services": services, "sab": sab,
     })
 
@@ -592,6 +592,40 @@ def start_sources():
 LINKS = {n: c["open"] for n, c in (CONFIG.get("sources") or {}).items() if isinstance(c, dict) and c.get("open")}
 if CONFIG.get("mediarium_open"):
     LINKS["mediarium"] = CONFIG["mediarium_open"]
+
+# Desktop apps a double-click may bring to the front or start (only for someone viewing from this computer). In config.json:
+#   "launch": {"navibeat": {"match": "navibeat", "command": "navibeat"}}   and   "sources": {"navidrome": {"launch": "navibeat"}}
+# "match" finds the app's window by its class or title; "command" starts it. The page only ever sends the name, never a command.
+LAUNCH = {n: s for n, s in (CONFIG.get("launch") or {}).items() if isinstance(s, dict) and re.fullmatch(r"[a-z0-9_]+", n) and s.get("command")}
+LAUNCHES = {n: c["launch"] for n, c in (CONFIG.get("sources") or {}).items() if isinstance(c, dict) and c.get("launch") in LAUNCH}
+
+
+def hyprland_env():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    if not sig or not os.path.isdir(os.path.join(runtime, "hypr", sig)):
+        folders = sorted((os.path.join(runtime, "hypr", d) for d in os.listdir(os.path.join(runtime, "hypr"))), key=os.path.getmtime) if os.path.isdir(os.path.join(runtime, "hypr")) else []
+        sig = os.path.basename(folders[-1]) if folders else None
+    return {**os.environ, "XDG_RUNTIME_DIR": runtime, "HYPRLAND_INSTANCE_SIGNATURE": sig} if sig else None
+
+
+def launch_app(name):
+    """Bring the app's window to the front, or start it. Returns "focused", "started" or an error word."""
+    spec, env = LAUNCH.get(name), hyprland_env()
+    if not spec or not env:
+        return "unavailable"
+    def hypr(*args):
+        return subprocess.run(["/usr/bin/hyprctl", *args], capture_output=True, text=True, timeout=5, env=env).stdout
+    try:
+        needle = (spec.get("match") or name).lower()
+        for c in json.loads(hypr("clients", "-j") or "[]"):
+            if needle in (c.get("class", "") + " " + c.get("initialClass", "") + " " + c.get("title", "")).lower():
+                hypr("dispatch", "focuswindow", "address:" + c["address"])
+                return "focused"
+        hypr("dispatch", "exec", spec["command"])
+        return "started"
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return "failed"
 
 
 # ---------- login ----------
@@ -702,7 +736,18 @@ class Handler(BaseHTTPRequestHandler):
         body, ctype = poster_cache[url]
         self.reply(200, body, ctype)
 
+    def from_this_computer(self):
+        return self.client_address[0] in ("127.0.0.1", "::1") or self.client_address[0] in BIND
+
     def do_POST(self):
+        if self.path.startswith("/api/launch/"):  # bring a desktop app to the front, for someone sitting at this computer
+            name = self.path[len("/api/launch/"):]
+            if not self.authed() or self.headers.get("X-Office") != "1":
+                return self.reply(401, b"Login needed", "text/plain")
+            if name not in LAUNCH or not self.from_this_computer():
+                return self.reply(403, b"Not here", "text/plain")
+            result = launch_app(name)
+            return self.reply(200 if result in ("focused", "started") else 502, json.dumps({"result": result}).encode(), "application/json")
         if self.path != "/login":
             return self.reply(404, b"Not found", "text/plain")
         ip = self.client_address[0]

@@ -8,10 +8,11 @@
   "mediarium_container": "mediarium",
   "mediarium_key_file": "mediarium_api_key",
   "secrets_dir": "secrets",
+  "launch": { "my_music_app": { "match": "part of the app's window class or title", "command": "command that starts it" } },
   "sources": {
     "birdnet": { "url": "http://birdnet-go.local:8080" },
     "pihole": { "url": "http://pi.hole" },
-    "navidrome": { "db": "/path/to/navidrome/data/navidrome.db", "music_root": "/path/to/your/music" },
+    "navidrome": { "db": "/path/to/navidrome/data/navidrome.db", "music_root": "/path/to/your/music", "launch": "my_music_app" },
     "cloudflared": { "url": "http://127.0.0.1:20241" },
     "backups": { "jobs": [["Label shown on the vault", "name-of-a-systemd-user-unit-without-.service"]] },
     "jellyfin": { "url": "http://127.0.0.1:8096", "open": "http://<an address your browser can reach>:8096" },
