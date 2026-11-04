@@ -1355,7 +1355,7 @@ async function tick() {
 
 // ---------- hover popups: what someone is doing, and any problems ----------
 const tip = $('tip');
-const BREAK_TEXT = { couch: 'Relaxing on the couch', pingpong: 'Playing ping pong', coffee: 'Having a coffee', beanbag: 'Chilling on a bean bag', birds: 'Watching the birds out the window', record: 'Listening to a record' };
+const BREAK_TEXT = { couch: 'Relaxing on the couch', pingpong: 'Playing ping pong', coffee: 'Having a coffee', beanbag: 'Chilling on a bean bag', birds: 'Looking out the window', record: 'Listening to a record' };
 function doing(p) {
   if (p.say) return typeof p.say === 'function' ? p.say() : p.say;
   if (!p.up) return `${p.name}\nNot running` + (p.issue ? `\n⚠ ${p.issue}` : '');

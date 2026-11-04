@@ -79,15 +79,16 @@ export default function (kit) {
   let tail = null;
 
   // ---------- Cloudflared: the fax machine ----------
-  const fax = kit.group(-5.75, FY, 6.6, undefined, -0.35);
-  kit.box(1.0, 0.78, 0.7, '#c9b99f', 0, 0.39, 0, fax);
-  kit.rbox(0.62, 0.2, 0.46, 0.05, '#ebe7de', 0, 0.88, 0, fax);
-  kit.rbox(0.44, 0.03, 0.34, 0.01, '#ffffff', 0, 1.0, -0.06, fax).rotation.x = -0.35;
-  kit.box(0.3, 0.02, 0.012, '#2a2c35', 0, 0.9, 0.235, fax);
-  const faxLed = kit.ball(0.03, glow('#4ade80', 2), 0.22, 0.99, 0.2, fax);
+  // it stands on the two small drive racks against the back glass wall (their tops are at 1.25; the group's floor is FY)
+  const fax = kit.group(-5.475, FY, 5.7);
+  const TOP = 1.25 - FY;
+  const faxBody = kit.rbox(0.62, 0.2, 0.46, 0.05, '#ebe7de', 0, TOP + 0.1, 0, fax);
+  kit.rbox(0.44, 0.03, 0.34, 0.01, '#ffffff', 0, TOP + 0.22, -0.06, fax).rotation.x = -0.35;
+  kit.box(0.3, 0.02, 0.012, '#2a2c35', 0, TOP + 0.12, 0.235, fax);
+  const faxLed = kit.ball(0.03, glow('#4ade80', 2), 0.22, TOP + 0.21, 0.2, fax);
   faxLed.castShadow = false;
-  const sheets = Array.from({ length: 4 }, () => { const s = kit.plane(0.3, 0.4, new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide }), 0, 0.9, 0.3, 0, -Math.PI / 2, fax); s.visible = false; return s; });
-  const faxPile = kit.box(0.34, 0.02, 0.42, '#f4f4f0', 0.78, 0.02, 0.3, fax);
+  const sheets = Array.from({ length: 4 }, () => { const s = kit.plane(0.3, 0.4, new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide }), 0, TOP + 0.12, 0.3, 0, -Math.PI / 2, fax); s.visible = false; return s; });
+  const faxPile = kit.box(0.34, 0.02, 0.42, '#f4f4f0', 0.6, 0.02, 1.35, fax);
   const flying = [];
   let tunnel = null;
 
@@ -128,7 +129,7 @@ export default function (kit) {
   operator.say = () => !tail ? 'Tailscale\nConnecting…' : `Tailscale operator\n${tail.online} of ${tail.total} devices on the line\n${tail.devices.filter((d) => d.active).length} talking right now`;
   kit.tipOn(signPlane, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\n` + backup.jobs.map((j) => `${j.ok ? '✓' : '✗'} ${j.name}${j.last ? ' · ' + hhmm(j.last) + ' (' + ago(backup.now - j.last) + ')' : ''}${j.next ? ' · next ' + hhmm(j.next) : ''}`).join('\n'), 'backups');
   kit.tipOn(ring, () => !backup ? 'Backups' : `Backups: ${backup.ok ? 'all good' : 'trouble: ' + backup.failed.join(', ')}\nLast backup ${backup.last_ok ? hhmm(backup.last_ok) + ' (' + ago(backup.now - backup.last_ok) + ')' : 'never'}`, 'backups');
-  kit.tipOn(fax.children[0], () => !tunnel ? 'Cloudflared' : `Cloudflared fax\n${tunnel.connections} tunnel connections · ${tunnel.errors} errors\n${tunnel.requests} requests handled since it started`, 'cloudflared');
+  kit.tipOn(faxBody, () => !tunnel ? 'Cloudflared' : `Cloudflared fax\n${tunnel.connections} tunnel connections · ${tunnel.errors} errors\n${tunnel.requests} requests handled since it started`, 'cloudflared');
 
   return {
     update(d) {
@@ -185,7 +186,7 @@ export default function (kit) {
       for (let i = flying.length - 1; i >= 0; i--) {
         const f = flying[i];
         f.age += dt;
-        f.s.position.set(0.0 + f.age * 0.3, 0.93 - Math.max(0, f.age - 1) * 0.5, 0.25 + f.age * 0.35);
+        f.s.position.set(f.age * 0.27, TOP + 0.15 - Math.max(0, f.age - 0.7) ** 2 * 0.55, 0.25 + f.age * 0.5);
         if (f.age > 2.2) { f.s.visible = false; flying.splice(i, 1); }
       }
       wheel.rotation.y = tail ? 0.2 * Math.sin(t * 0.5) : 0;

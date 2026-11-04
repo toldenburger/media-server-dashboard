@@ -4,7 +4,7 @@
 
 A dashboard for your self-hosted media server, plus a tiny 3D office where **your services are the employees**.
 This is a fork of [**Essq1337/media-server-dashboard**](https://github.com/Essq1337/media-server-dashboard), ported from a Mac to Linux, pointed at
-[Mediarium](https://github.com/rdborg/Mediarium), and extended with more workers, windows with real birds in them, and a server room crew.
+[Mediarium](https://github.com/rdborg/Mediarium), and extended with more workers, a pixel tree full of the day's birds, and a server room crew.
 
 ## A thank-you to the original
 
@@ -47,26 +47,16 @@ Every extra service is **one small Python file in `sources/`** (it polls the ser
 authenticated `/media/<source>/` proxy with strict input checks, and keeps credentials in `secrets/<name>` files (mode 600, never committed).
 See [`sources/README.md`](sources/README.md). The props get a little kit of helpers (rounded boxes, canvas textures, standing characters, hover text).
 
-### Birds in the windows (BirdNET-Go)
+### The real sky in the windows
 
-![The bird windows by day and by night](docs/screenshots/windows_day.png)
-![The same windows at night](docs/screenshots/windows_night.png)
-
-If you run [BirdNET-Go](https://github.com/tphakala/birdnet-go), two windows get a view:
-
-- the **bird of the day** is the species with the most detections since midnight;
-- the **newest rare bird of the week** is whatever BirdNET-Go's own *new species* or *infrequent species* alert fired for last, so the window and your
-  alerts always agree.
-
-Each is a real photo card hanging from a branch and swaying in the breeze; hover for the details. The photos are fetched by the dashboard, so phones
-that can't resolve your Pi's hostname still see them. The windows also show **the real sky**: it follows the sun's actual position over your
-location (stars at night, golden hour in the evening). Add `?hour=21` to the office address to preview another time of day.
+The windows show **the real sky**: it follows the sun's actual position over your location (stars at night, golden hour in the evening). Set
+`"location": {"lat": .., "lon": ..}` in `config.json`, and add `?hour=21` to the office address to preview another time of day.
 
 ### A pixel tree with a bird feeder
 
 ![The pixel tree and bird feeder beside the office](docs/screenshots/bird_tree.png)
 
-Outside the right edge of the office stands a tree made of cubes, with a bird feeder in front of it. The nine busiest species of the day sit in it as little
+If you run [BirdNET-Go](https://github.com/tphakala/birdnet-go), a tree made of cubes stands outside the right edge of the office, with an open bird feeder platform in front of it. The nine busiest species of the day sit in it as little
 pixel birds, the two busiest at the feeder, the rest on the branches and on top of the leaves. Each species gets its own colours (robin, blue tit, great tit,
 blackbird, sparrow, magpie, finches, starling, crows and a few more, in English and Dutch; anything else gets a colour made from its name). They preen, peck
 at the feeder and hop around, and the bird that was heard most recently hops. Hover one for its name and count; double-click opens BirdNET-Go.
@@ -89,7 +79,7 @@ None of these need credentials; they read local state only.
   few minutes whenever something starts, stops or restarts, and checks his clipboard when all is quiet.
 - **Tailscale switchboard operator**: a board of lights, one per device on your tailnet (green online, cyan talking right now, dark offline), and a desk
   of little laptops and phones for the devices that are on.
-- **Cloudflared fax machine**: prints a page whenever the tunnel handles a request; the light turns red if the tunnel is down.
+- **Cloudflared fax machine**: sits on the two small drive racks and prints a page whenever the tunnel handles a request; the light turns red if the tunnel is down.
 - **Backup vault**: a hatch in the floor ("the basement") with a screen showing when the last backup ran and each job's result. The ring glows green,
   or red when any job has failed. It reads your backup jobs' systemd units.
 

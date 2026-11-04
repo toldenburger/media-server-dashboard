@@ -6,7 +6,7 @@ export default function (kit) {
   const ago = (unix, now) => { const h = Math.max(1, Math.round((now - unix) / 3600)); return h < 36 ? `${h} h ago` : `${Math.round(h / 24)} days ago`; };
   let data = null, frameAt = 0;
 
-  const nook = kit.group(11.25, 0, 4.4, undefined, 0);
+  const nook = kit.group(11.4, 0, 4.4, undefined, -Math.PI / 2);
   kit.rbox(1.6, 0.42, 0.5, 0.04, '#5a4a3c', 0, 0.21, 0, nook);
   [-0.4, 0.4].forEach((x) => { kit.rbox(0.7, 0.3, 0.02, 0.01, '#6b5a4a', x, 0.21, 0.255, nook); kit.rbox(0.12, 0.025, 0.03, 0.01, '#c9ced6', x * 0.3, 0.3, 0.27, nook); });
   kit.box(0.5, 0.03, 0.25, '#23252e', 0, 0.435, 0, nook);

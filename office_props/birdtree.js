@@ -66,15 +66,12 @@ export default function (kit) {
   mesh.castShadow = false; mesh.receiveShadow = false;
   tree.add(mesh);
 
-  // the feeder, in front of the tree (towards the camera)
+  // the feeder, in front of the tree: a post with a flat platform (towards the camera)
   const feeder = kit.group(-2.1, 0, 3.3, tree);
   kit.box(0.14, 1.3, 0.14, '#6b4a2e', 0, 0.65, 0, feeder);
-  kit.box(1.2, 0.06, 0.8, '#b08a5a', 0, 1.33, 0, feeder);  // tray
+  kit.box(1.2, 0.06, 0.8, '#b08a5a', 0, 1.33, 0, feeder);  // an open platform, nothing above it
+  [[0, 0.37, 1.2, 0.04], [0, -0.37, 1.2, 0.04]].forEach(([x, z, w, d]) => kit.box(w, 0.05, d, '#8a6a44', x, 1.38, z, feeder));
   [[-0.5, '#e0b94a'], [-0.3, '#8a5a30'], [0.2, '#e0b94a'], [0.45, '#8a5a30']].forEach(([x, c]) => kit.box(0.09, 0.04, 0.09, c, x, 1.38, 0.1 * Math.sign(x || 1), feeder));
-  kit.box(0.9, 0.5, 0.55, '#c0643c', 0, 1.62, -0.05, feeder);  // house
-  kit.box(1.1, 0.07, 0.75, '#8a3f28', 0, 1.9, -0.05, feeder);  // roof
-  kit.box(0.9, 0.06, 0.6, '#8a3f28', 0, 1.97, -0.05, feeder);
-  kit.box(0.5, 0.05, 0.4, '#8a3f28', 0, 2.03, -0.05, feeder);
   // flowers in the grass
   const fr = rng(3);
   for (let i = 0; i < 9; i++) {

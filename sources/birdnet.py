@@ -1,4 +1,4 @@
-"""BirdNET-Go on the Raspberry Pi: the top bird today and the newest rare bird of the week, for the two windows.
+"""BirdNET-Go on the Raspberry Pi: the busiest species today ("flock", for the birds in the tree), plus the top bird and the newest rare bird of the week.
 
 "Rare" is whatever BirdNET-Go's own "New species" and "Infrequent species" alert rules fired for, the same
 thing that sends the desktop and HomePod alerts, so the window and the alerts always agree.
