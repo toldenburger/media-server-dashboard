@@ -893,7 +893,7 @@ const BREAKS = [
   { at: [8.15, -1.2], face: -Math.PI / 2, pose: 'pingpong', node: 'S3' },
   { at: [9.75, 3.75], face: Math.PI / 4, pose: 'beanbag', node: 'S4' },
   { at: [9.9, -7.7], face: Math.PI, pose: 'birds', node: 'N4' },
-  { at: [7.3, 7.55], face: 0.8, pose: 'record', node: 'S3', via: [[8.2, 2.8], [7.6, 5.2]] },
+  { at: [8.0, 7.4], face: 0, pose: 'record', node: 'S3', via: [[8.2, 2.8], [7.6, 5.2]] },
 ];
 // How long someone stays at each spot before wandering off, in seconds [min, extra].
 const STAY = { couch: [30, 40], pingpong: [25, 25], coffee: [10, 12], beanbag: [30, 40], birds: [15, 20], record: [20, 25] };
@@ -1452,6 +1452,8 @@ const kit = {
     place(p, { pose: 'stand', ...spot });
     return p;
   },
+  // widen the framing for props outside the room: extendView([[x, y, z], ...])
+  extendView(points) { points.forEach(([x, y, z]) => ROOM_CORNERS.push(new THREE.Vector3(x, y, z))); fitView(); },
   tipOn(obj, tip, link) { obj.userData.tip = tip; if (link) obj.userData.link = link; if (!pickables.includes(obj)) pickables.push(obj); },
 };
 fetch('/office_props/index.json').then((r) => r.json()).then((names) => names.forEach((n) => import(`/office_props/${n}.js`).then((m) => {

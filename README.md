@@ -62,6 +62,15 @@ Each is a real photo card hanging from a branch and swaying in the breeze; hover
 that can't resolve your Pi's hostname still see them. The windows also show **the real sky**: it follows the sun's actual position over your
 location (stars at night, golden hour in the evening). Add `?hour=21` to the office address to preview another time of day.
 
+### A pixel tree with a bird feeder
+
+![The pixel tree and bird feeder beside the office](docs/screenshots/bird_tree.png)
+
+Outside the right edge of the office stands a tree made of cubes, with a bird feeder in front of it. The nine busiest species of the day sit in it as little
+pixel birds, the two busiest at the feeder, the rest on the branches and on top of the leaves. Each species gets its own colours (robin, blue tit, great tit,
+blackbird, sparrow, magpie, finches, starling, crows and a few more, in English and Dutch; anything else gets a colour made from its name). They preen, peck
+at the feeder and hop around, and the bird that was heard most recently hops. Hover one for its name and count; double-click opens BirdNET-Go.
+
 ### The Pi-hole bouncer
 
 ![The Pi-hole bouncer](docs/screenshots/bouncer.png)

@@ -7,8 +7,8 @@ export default function (kit) {
   const sleeveColor = (s) => `hsl(${hue(s)}, 45%, 55%)`;
   const ago = (unix, now) => { const m = Math.max(1, Math.round((now - unix) / 60)); return m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
 
-  // the table sits in the front corner and faces the room, so the camera looks at its back
-  const rig = kit.group(8.0, 0, 8.25, undefined, -3 * Math.PI / 4);
+  // the table sits square to the back wall, facing it, so the camera looks at its back
+  const rig = kit.group(8.0, 0, 8.25, undefined, Math.PI);
   const wood = '#c89b6d';
   kit.rbox(1.6, 0.07, 0.85, 0.03, wood, 0, 0.75, 0, rig);
   [[-0.72, -0.37], [0.72, -0.37], [-0.72, 0.37], [0.72, 0.37]].forEach(([x, z]) => kit.box(0.06, 0.72, 0.06, '#a77c52', x, 0.36, z, rig));

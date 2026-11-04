@@ -56,6 +56,10 @@ def poll(ctx):
             "kind": RARE_KIND.get(h["rule_id"], "rare"), "confidence": ev.get("confidence"),
             "this_week": datetime.now(timezone.utc) - fired < timedelta(days=7), "image": image(sci),
         }
+    out["flock"] = [  # the busiest species today, for the birds in the tree
+        {"name": s["common_name"], "scientific": s["scientific_name"], "count": s["count"], "last_heard": s.get("latest_heard")}
+        for s in sorted(daily, key=lambda s: s["count"], reverse=True)[:9]
+    ]
     last = api(ctx, "detections?numResults=1&queryType=all").get("data", [])
     out["latest"] = (last and {"id": last[0]["id"], "name": last[0]["commonName"], "time": last[0]["time"], "confidence": last[0]["confidence"]}) or None
     return out
