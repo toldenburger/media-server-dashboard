@@ -3,8 +3,8 @@
 Reads local files only (read-only, no login):
   - Claude Code: the status file every running session keeps in ~/.claude/sessions (its name, whether it is busy or idle, and when it
     waits for you, for example for an approval). A session shows up while busy, waiting, or changed in the last 45 minutes.
-  - OpenCode: running opencode processes (their working folder names the project) and, in its database, whether a session there changed in
-    the last 25 seconds.
+  - OpenCode: running opencode processes (their working folder names the project, or, where a folder cannot be read, the most recently used
+    project in its database) and whether a session there changed in the last 25 seconds.
 The source hands the server a list of "workers" (see sources/README.md), with "attention" set when the agent needs you; the first few get a desk along the back wall and keep it while they live.
 Config: "sources": {"agents": {"slots": 3}}  (how many agents are shown at once; the office has that many desks, up to 3).
 """
@@ -54,33 +54,48 @@ def claude_sessions(now):
     return found
 
 
-def opencode_instances(now):
-    folders = {}
+def opencode_processes():
+    """Folders of the running OpenCode programs; a folder is None when it cannot be read (inside the service's sandbox only the existence of the
+    process is visible)."""
+    found = []
     for pid in (p for p in os.listdir("/proc") if p.isdigit()):
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as fh:
-                cmd = fh.read().decode("utf-8", "replace")
-            if "opencode" not in cmd or "claude" in cmd.split("\0")[0]:
-                continue
-            cwd = os.readlink(f"/proc/{pid}/cwd")
+                args = fh.read().decode("utf-8", "replace").split("\0")
         except OSError:
             continue
-        if cwd not in ("/", "") and not cwd.startswith("/proc"):
-            folders[cwd] = True
-    out = []
+        if not (os.path.basename(args[0]) == "opencode" or any("@opencode+cli" in a for a in args)):
+            continue
+        try:
+            found.append(os.readlink(f"/proc/{pid}/cwd"))
+        except OSError:
+            found.append(None)
+    return found
+
+
+def opencode_instances(now):
+    procs = opencode_processes()
+    if not procs:
+        return []
     try:
         db = sqlite3.connect(f"file:{OPENCODE_DB}?mode=ro", uri=True, timeout=3)
     except sqlite3.Error:
         db = None
-    for cwd in folders:
-        age = 10 ** 9
-        if db:
-            try:
-                row = db.execute("select max(time_updated) from session where directory = ?", (cwd,)).fetchone()
-                age = now - (row[0] or 0) / 1000
-            except sqlite3.Error:
-                pass
-        out.append({"id": "opencode:" + cwd, "look": "opencode", "project": project_name(cwd), "working": age < WORKING, "attention": None, "age": age})
+    recent = {}  # folder -> age of its newest session, newest first
+    if db:
+        try:
+            for folder, updated in db.execute("select directory, max(time_updated) from session group by directory order by 2 desc limit 12"):
+                recent[folder] = now - (updated or 0) / 1000
+        except sqlite3.Error:
+            pass
+    folders = [f for f in procs if f]
+    if len(folders) < len(procs):  # some folders unreadable: name those instances after the most recently used projects
+        spare = [f for f in recent if f not in folders and f not in ("/", HOME)] + [None] * len(procs)
+        folders += spare[: len(procs) - len(folders)]
+    out = []
+    for i, folder in enumerate(folders):
+        age = recent.get(folder, 10 ** 9)
+        out.append({"id": "opencode:" + (folder or str(i)), "look": "opencode", "project": project_name(folder) if folder else "session", "working": age < WORKING, "attention": None, "age": age})
     if db:
         db.close()
     return out
