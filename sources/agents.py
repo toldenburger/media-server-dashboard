@@ -6,12 +6,21 @@ Reads local files only (read-only, no login):
   - OpenCode: running opencode processes (their working folder names the project, or, where a folder cannot be read, the most recently used
     project in its database) and whether a session there changed in the last 25 seconds.
 The source hands the server a list of "workers" (see sources/README.md), with "attention" set when the agent needs you; the first few get a desk along the back wall and keep it while they live.
-Config: "sources": {"agents": {"slots": 3}}  (how many agents are shown at once; the office has that many desks, up to 3).
+Config: "sources": {"agents": {"slots": 3, "opencode_api": true}}  (how many agents are shown at once, up to the 3 desks; and whether to ask
+OpenCode's own local server whether a session is working or waits for an approval or question.)
+
+OpenCode's local server needs the password OpenCode keeps in ~/.local/state/opencode/service.json. It is read again on every poll, held only in
+memory and sent only to a loopback address, and only GET requests are made. That password can control OpenCode, so set "opencode_api": false if
+you would rather not give the dashboard that access (agents then show only as present, and as working while their session changed in the last
+25 seconds).
 """
+import base64
 import json
 import os
+import re
 import sqlite3
 import time
+import urllib.request
 
 NAME = "agents"
 EVERY = 6
@@ -21,6 +30,7 @@ NEEDS_YOU = {"waiting", "blocked", "needs_approval", "needs-approval", "needs-au
 HOME = os.path.expanduser("~")
 slots = {}      # agent id -> desk slot, kept while the agent lives
 OPENCODE_DB = os.path.join(HOME, ".local/share/opencode/opencode.db")
+OPENCODE_SERVICE = os.path.join(HOME, ".local/state/opencode/service.json")
 
 
 def project_name(folder):
@@ -73,38 +83,82 @@ def opencode_processes():
     return found
 
 
-def opencode_instances(now):
+def opencode_api(path):
+    """GET from OpenCode's own local server (the address and password it keeps in ~/.local/state/opencode/service.json, read again on every call
+    and only ever sent to a loopback address). Returns the data, or None when it is not available."""
+    try:
+        with open(OPENCODE_SERVICE, encoding="utf-8") as fh:
+            svc = json.load(fh)
+        if not re.match(r"http://(127\.0\.0\.1|localhost|\[::1\]):\d+$", svc["url"]):
+            return None
+        auth = base64.b64encode(b"opencode:" + svc["password"].encode()).decode()
+        with urllib.request.urlopen(urllib.request.Request(svc["url"] + path, headers={"Authorization": "Basic " + auth}), timeout=4) as r:
+            return json.load(r).get("data")
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def opencode_recent(now, use_api):
+    """The newest OpenCode session per project folder, newest first: {folder, age, idle, id}. From its local API when allowed; otherwise from its
+    database (the current session_v2 table), where whether a session is idle is not known."""
+    data = opencode_api("/api/session?limit=12") if use_api else None
+    out, seen = [], set()
+    if isinstance(data, list):
+        for sess in data:
+            folder, t = (sess.get("location") or {}).get("directory"), sess.get("time") or {}
+            if folder and sess.get("id") and folder not in seen:
+                seen.add(folder)
+                out.append({"folder": folder, "age": now - (t.get("updated") or 0) / 1000, "idle": "idle" in t, "id": sess["id"]})
+        return out
+    try:
+        db = sqlite3.connect(f"file:{OPENCODE_DB}?mode=ro", uri=True, timeout=3)
+        try:
+            for folder, updated in db.execute("select directory, max(time_updated) from session_v2 group by directory order by 2 desc limit 12"):
+                out.append({"folder": folder, "age": now - (updated or 0) / 1000, "idle": None, "id": None})
+        finally:
+            db.close()
+    except sqlite3.Error:
+        pass
+    return out
+
+
+def opencode_attention(session_id):
+    """A pending approval or question in an OpenCode session, from its local API (a session that is not loaded answers 404, meaning no information)."""
+    perm = opencode_api(f"/api/session/{session_id}/permission")
+    if perm:
+        return "approval: " + str((perm[0] or {}).get("action", "?"))[:24]
+    form = opencode_api(f"/api/session/{session_id}/form")
+    if form:
+        return "question"
+    return None
+
+
+def opencode_instances(now, use_api=True):
     procs = opencode_processes()
     if not procs:
         return []
-    try:
-        db = sqlite3.connect(f"file:{OPENCODE_DB}?mode=ro", uri=True, timeout=3)
-    except sqlite3.Error:
-        db = None
-    recent = {}  # folder -> age of its newest session, newest first
-    if db:
-        try:
-            for folder, updated in db.execute("select directory, max(time_updated) from session group by directory order by 2 desc limit 12"):
-                recent[folder] = now - (updated or 0) / 1000
-        except sqlite3.Error:
-            pass
+    recent = opencode_recent(now, use_api)
+    by_folder = {r["folder"]: r for r in recent}
     folders = [f for f in procs if f]
     if len(folders) < len(procs):  # some folders unreadable: name those instances after the most recently used projects
-        spare = [f for f in recent if f not in folders and f not in ("/", HOME)] + [None] * len(procs)
+        spare = [r["folder"] for r in recent if r["folder"] not in folders and r["folder"] not in ("/", HOME)] + [None] * len(procs)
         folders += spare[: len(procs) - len(folders)]
     out = []
     for i, folder in enumerate(folders):
-        age = recent.get(folder, 10 ** 9)
-        out.append({"id": "opencode:" + (folder or str(i)), "look": "opencode", "project": project_name(folder) if folder else "session", "working": age < WORKING, "attention": None, "age": age})
-    if db:
-        db.close()
+        rec = by_folder.get(folder)
+        working = bool(rec and (rec["idle"] is False or (rec["idle"] is None and rec["age"] < WORKING)))
+        note = opencode_attention(rec["id"]) if rec and rec["id"] and rec["idle"] is False else None
+        out.append({
+            "id": "opencode:" + (folder or str(i)), "look": "opencode", "project": project_name(folder) if folder else "session", "working": working,
+            "attention": "Needs you: " + note if note else None, "age": rec["age"] if rec else 10 ** 9,
+        })
     return out
 
 
 def poll(ctx):
     now = time.time()
     count = int(ctx.config.get("slots") or 3)
-    agents = claude_sessions(now) + opencode_instances(now)
+    agents = claude_sessions(now) + opencode_instances(now, ctx.config.get("opencode_api", True))
     agents.sort(key=lambda a: (not a["attention"], not a["working"], a["age"]))
     shown = agents[:count]
     ids = {a["id"] for a in shown}
