@@ -117,6 +117,16 @@ Next to the tree, on the same grass patch, two more things report what your hous
 
 Both come from Home Assistant sensors you name in `config.json` (see `config.example.json`); every one is optional.
 
+### Things you measure with a smart plug (Home Assistant)
+
+Anything with a power and an energy sensor in Home Assistant (a Shelly plug, say) can be added as a measured device. The first one is the
+**coffee machine**: a little sign on the kitchen counter counts today's cups and the energy they took, a light on the machine glows amber while it
+warms up and red while it brews, and a cup fills with steam above it while a coffee is being made. Hover it for the power right now.
+
+The cups are counted from Home Assistant's own history of the plug's power, not from a live trigger, so a restart loses nothing. The machine this was
+tuned on switches itself fully off (0 W) and its warm-up looks just like a brew, so the source reads the cycle: a burst right after it was off is the
+warm-up, a short burst right before it goes off is the rinse, and what is left is a cup. Other machines may need other numbers (`link_s`, `rinse_max_s`).
+
 ### Headphones, Linkwarden and podcasts
 
 - **Headphones** (the music downloader): a **record crate** beside the record player, with a sleeve for every album that arrived lately (the newest

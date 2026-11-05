@@ -29,6 +29,7 @@
       "light_prefix": "light.living_room",
       "compressor": "sensor.heat_pump_compressor_frequency",
       "heat_power": "sensor.heat_pump_heat_output_kw",
+      "devices": { "coffee": { "name": "Coffee machine", "kind": "coffee", "power": "sensor.kitchen_plug_power", "energy": "sensor.kitchen_plug_energy", "active_w": 100 } },
       "solar": { "power": "sensor.solar_current_power", "lifetime": "sensor.solar_lifetime_energy", "today": "sensor.solar_energy_today" },
       "heatpump": {
         "electric_power": "sensor.heat_pump_electric_power", "cop": "sensor.heat_pump_cop_now", "cop_today": "sensor.heat_pump_cop_today",

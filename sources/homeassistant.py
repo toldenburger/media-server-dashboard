@@ -11,13 +11,112 @@ Two more optional blocks feed the garden props (office_props/garden.js):
   "heatpump": {"electric_power": .., "cop": .., "cop_today": .., "heat_today": .., "electric_today": .., "outdoor": .., "leaving_water": ..,
                "defrost": "binary_sensor..", "hot_water": "binary_sensor.. (on while it makes hot water)", "fan": .., "error": ..}
 (the heat pump block reuses "compressor" and "heat_power" from above). A solar sensor that is "unavailable" means the inverter is asleep.
+
+"devices": things you measure with a smart plug, one entry each (office_props/devices.js draws them):
+  "devices": {"coffee": {"name": "Coffee machine", "power": "sensor.kitchen_plug_power", "energy": "sensor.kitchen_plug_energy", "active_w": 100}}
+Each gets its watts now, kWh today, and today's "runs": stretches where the power stayed at or above `active_w` (counted from Home Assistant's own
+history, so a restart loses nothing). `gap_s` (default 45) is how long it must stay below to end a run, `min_s` (default 5) drops blips.
+
+With "kind": "coffee" the runs are read as the cycle of a coffee machine that switches itself fully off (0 W): bursts closer than `link_s` (20)
+belong to one drink; the first burst after the machine was off is its warm-up, and a short burst (`rinse_max_s`, 12) just before it goes off
+again is its rinse; whatever is left is a cup. These rules were tuned on one machine's power curve; other machines may need other numbers.
 """
+import urllib.parse
 from datetime import datetime
 
 NAME = "homeassistant"
 EVERY = 20
 seen_peak = {"w": 0.0}  # the most solar power seen since the server started, to scale the panels' glow
 UNITS = {"W": 1, "kW": 1000, "MW": 1e6, "Wh": 1, "kWh": 1000, "MWh": 1e6}
+
+
+def runs(points, active_w, gap_s, min_s, now):
+    """Stretches [start, end] where the power stayed >= active_w. `points` are (unix time, watts) in order; a reading holds until the next one."""
+    out, start, below_since = [], None, None
+    for t, w in points + [(now, points[-1][1] if points else 0.0)]:
+        if w >= active_w:
+            if start is not None and below_since is not None and t - below_since >= gap_s:  # it was quiet long enough before this reading
+                out.append([start, below_since])
+                start = None
+            if start is None:
+                start = t
+            below_since = None
+        elif start is not None:
+            below_since = t if below_since is None else below_since
+            if t - below_since >= gap_s:
+                out.append([start, below_since])
+                start, below_since = None, None
+    if start is not None:
+        out.append([start, now if below_since is None else below_since])
+    return [r for r in out if r[1] - r[0] >= min_s]
+
+
+def was_off(points, t0, t1, off_w=0.5):
+    """Did the power read (nearly) zero at any moment between t0 and t1? The reading in force at t0 counts."""
+    before = [w for t, w in points if t <= t0]
+    if before and before[-1] < off_w:
+        return True
+    return any(t0 < t <= t1 and w < off_w for t, w in points)
+
+
+def cups(points, cfg, now):
+    """Split the bursts of power into warm-ups, cups and rinses (see the module notes). Returns (cups, state of the machine right now)."""
+    bursts = runs(points, cfg.get("active_w", 100), 8, 3, now)
+    groups = []
+    for b in bursts:
+        if groups and b[0] - groups[-1][-1][1] <= cfg.get("link_s", 20):
+            groups[-1].append(b)
+        else:
+            groups.append([b])
+    found, state = [], None
+    for g in groups:
+        start, end = g[0][0], g[-1][1]
+        warm = was_off(points, start - 30, start)
+        rinse = was_off(points, end, end + 45)
+        live = end >= now - 8
+        keep = list(g)
+        if warm:
+            keep = keep[1:]
+        if rinse and keep and keep[-1][1] - keep[-1][0] <= cfg.get("rinse_max_s", 12):
+            keep = keep[:-1]
+        if live:
+            state = "brewing" if keep else ("warming" if warm else "brewing")
+        if keep:
+            found.append([keep[0][0], keep[-1][1]])
+    return found, state
+
+
+def device(ctx, base, auth, states, cfg):
+    watts = reading(states, cfg.get("power"))
+    now = datetime.now().astimezone()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    pts = []
+    if cfg.get("power"):
+        url = f"{base}/api/history/period/{urllib.parse.quote(midnight.isoformat())}?filter_entity_id={cfg['power']}&minimal_response&no_attributes"
+        rows = ctx.get_json(url, auth, timeout=20)
+        for r in rows[0] if rows else []:
+            try:
+                pts.append((datetime.fromisoformat(r["last_changed"]).timestamp(), float(r["state"])))
+            except (ValueError, KeyError):
+                pass
+    state = None
+    if cfg.get("kind") == "coffee":
+        found, state = cups(pts, cfg, now.timestamp())
+    else:
+        found = runs(pts, cfg.get("active_w", 100), cfg.get("gap_s", 45), cfg.get("min_s", 5), now.timestamp())
+    kwh = None
+    if cfg.get("energy"):
+        e = reading(states, cfg["energy"], 1000)
+        first = None
+        url = f"{base}/api/history/period/{urllib.parse.quote(midnight.isoformat())}?filter_entity_id={cfg['energy']}&minimal_response&no_attributes"
+        for r in (ctx.get_json(url, auth, timeout=20) or [[]])[0]:
+            try:
+                first = float(r["state"]) * UNITS.get(states.get(cfg["energy"], {}).get("attributes", {}).get("unit_of_measurement"), 1) / 1000
+                break
+            except (ValueError, KeyError):
+                pass
+        kwh = round(e - first, 3) if e is not None and first is not None else None
+    return {"name": cfg.get("name"), "watts": watts, "kwh_today": kwh, "runs": found, "state": state, "active": (state == "brewing") if state else (bool(found) and found[-1][1] >= now.timestamp() - 1), "now": now.timestamp(), "active_w": cfg.get("active_w", 100)}
 
 
 def reading(states, entity, per=1):
@@ -81,6 +180,14 @@ def poll(ctx):
             "defrost": on("defrost"), "hot_water": on("hot_water"),
             "error": err["state"] if err and err["state"] not in ("Normal", "unknown", "unavailable", "-", "", "0") else None,
         }
+    devices = cfg.get("devices")
+    if devices:
+        out["devices"] = {}
+        for key, d in devices.items():
+            try:
+                out["devices"][key] = device(ctx, base, {"Authorization": "Bearer " + ctx.secret("ha_token")}, states, d)
+            except Exception as e:  # one broken plug must not take the rest of Home Assistant down
+                out["devices"][key] = {"error": str(e)[:80]}
     prefix = cfg.get("light_prefix")
     if prefix:
         on = [s for e, s in states.items() if e.startswith(prefix) and s["state"] == "on"]
