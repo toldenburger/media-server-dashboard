@@ -44,6 +44,7 @@
     "spaarpot": { "db": "/path/to/spaarpot.db" },
     "headphones": { "db": "/path/to/headphones/config/headphones.db", "open": "http://<an address your browser can reach>:8181" },
     "linkwarden": { "container": "linkwarden-db", "user": "linkwarden", "database": "linkwarden", "open": "http://<an address your browser can reach>:3010" },
+    "printer": { "queue": "your_cups_queue", "host": "<the printer's address on your network>", "open": "http://localhost:631/printers/your_cups_queue" },
     "opodsync": { "db": "/path/to/opodsync/data/data.sqlite", "open": "http://<an address your browser can reach>:8765" }
   },
   "sources_off": []

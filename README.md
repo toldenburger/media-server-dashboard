@@ -127,6 +127,16 @@ The cups are counted from Home Assistant's own history of the plug's power, not 
 tuned on switches itself fully off (0 W) and its warm-up looks just like a brew, so the source reads the cycle: a burst right after it was off is the
 warm-up, a short burst right before it goes off is the rinse, and what is left is a cup. Other machines may need other numbers (`link_s`, `rinse_max_s`).
 
+### The big copier (your printer)
+
+A big floor-standing copier at the front edge of the office is your real printer. Its screen shows whether it is ready, the ink levels and the pages
+printed today and in total. Two cartridge windows on the front show the ink left (tri-colour and black; a level at or under 20 % blinks red), the
+drawers light up when the paper is out, and the light on top is green (ready), blue (printing), amber (low on ink) or red (paper out, jam, stopped).
+**While a job prints** the sheets slide out of the side slot onto the tray, the scanner bar sweeps, the machine shakes a little and the screen counts
+the pages. Hover for the ink levels with bars, the paper, the queue and the page counts; double-click opens the CUPS page.
+
+It asks the printer over IPP (`ipptool`, part of CUPS) and reads CUPS's job list, read-only. HP printers also report their own page and jam counters.
+
 ### Headphones, Linkwarden and podcasts
 
 - **Headphones** (the music downloader): a **record crate** beside the record player, with a sleeve for every album that arrived lately (the newest
@@ -134,7 +144,7 @@ warm-up, a short burst right before it goes off is the rinse, and what is left i
   while the record player plays. Hover for what is downloaded, arriving and wanted. Read from Headphones' own database, no API key.
 - **Linkwarden** (bookmarks): a **cork pinboard** on the left wall with a sticky note for each of the newest saved links. When a new link is saved,
   from the web app or from your phone, a **librarian** walks to the board and pins a note, then walks back to his book cart. Hover for the latest titles.
-- **Opodsync** (podcast sync): a **radio on a cabinet** at the front edge, with the cover of the podcast episode your apps played last standing next
+- **Opodsync** (podcast sync): a **radio on a cabinet** on the wooden floor at the front edge, with the cover of the podcast episode your apps played last standing next
   to it. The display shows the podcast, the episode, how far you got and how long ago; the ON AIR light and floating notes are on while something was
   played in the last twenty minutes. The episode title and cover come from the podcast's own public feed, which the dashboard fetches (at most once an hour).
 
@@ -206,6 +216,7 @@ Nobody shares a spot, and everyone stays a while before moving on.
    | Nextcloud, FreshRSS, BookOrbit | the Docker container names; they are read with `docker exec`, no login |
    | Linkwarden | the name of its Postgres container (read with `docker exec`, a plain select, no token) |
    | Headphones, Opodsync | the path of their database files (SQLite, read-only) |
+   | Printer | the CUPS queue name and, optionally, the printer's address on your network (`ipptool` must be installed, it comes with CUPS) |
    | Spaarpot | the path of its SQLite file |
    | Docker, Tailscale, Cloudflared, backups | nothing (see `config.example.json` for overrides) |
 

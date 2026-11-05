@@ -1,4 +1,4 @@
-// A radio on a little cabinet at the front edge, between the server room and the plant. Data from sources/opodsync.py.
+// A radio on a little cabinet at the front edge on the wooden floor, just right of the plant. Data from sources/opodsync.py.
 // It shows the podcast episode your apps played or synced last: the cover stands beside it, the display has the names, and the
 // ON AIR light and the floating notes are on while something was played in the last twenty minutes. Hover for the details,
 // double-click opens the Opodsync server.
@@ -9,7 +9,7 @@ export default function (kit) {
   const ago = (unix) => { const m = Math.max(1, Math.round((Date.now() / 1000 - unix) / 60)); return m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
   const device = (d) => (d || '').replace(/_/g, ' ').replace(/^antennapod/i, 'AntennaPod');
 
-  const cab = kit.group(-2.35, 0, 8.45);
+  const cab = kit.group(1.25, 0, 8.45);
   const wood = '#a8754a', dark = '#7a5232';
   kit.rbox(1.15, 0.7, 0.46, 0.03, wood, 0, 0.45, 0, cab);
   kit.rbox(1.2, 0.05, 0.5, 0.02, '#c99a68', 0, 0.82, 0, cab);
