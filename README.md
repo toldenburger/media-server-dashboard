@@ -125,7 +125,7 @@ warms up and red while it brews, and a cup fills with steam above it while a cof
 
 The cups are counted from Home Assistant's own history of the plug's power, not from a live trigger, so a restart loses nothing. The machine this was
 tuned on switches itself fully off (0 W) and its warm-up looks just like a brew, so the source reads the cycle: a burst right after it was off is the
-warm-up, a short burst right before it goes off is the rinse, and what is left is a cup. Other machines may need other numbers (`link_s`, `rinse_max_s`).
+warm-up, a short burst right before it goes off is the rinse, short lone bursts it fires now and then to stay warm are ignored, and what is left (with a real brew burst in it) is a cup. Other machines may need other numbers (`link_s`, `rinse_max_s`).
 
 ### The big copier (your printer)
 

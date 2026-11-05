@@ -19,7 +19,8 @@ history, so a restart loses nothing). `gap_s` (default 45) is how long it must s
 
 With "kind": "coffee" the runs are read as the cycle of a coffee machine that switches itself fully off (0 W): bursts closer than `link_s` (20)
 belong to one drink; the first burst after the machine was off is its warm-up, and a short burst (`rinse_max_s`, 12) just before it goes off
-again is its rinse; whatever is left is a cup. These rules were tuned on one machine's power curve; other machines may need other numbers.
+again is its rinse; whatever is left is a cup, provided it contains a real brew burst (`brew_min_s`, 15): short lone bursts a machine fires now and
+then to keep its boiler warm are not drinks. These rules were tuned on one machine's power curve; other machines may need other numbers.
 """
 import urllib.parse
 from datetime import datetime
@@ -79,9 +80,10 @@ def cups(points, cfg, now):
             keep = keep[1:]
         if rinse and keep and keep[-1][1] - keep[-1][0] <= cfg.get("rinse_max_s", 12):
             keep = keep[:-1]
+        brewed = bool(keep) and max(b[1] - b[0] for b in keep) >= cfg.get("brew_min_s", 15)
         if live:
-            state = "brewing" if keep else ("warming" if warm else "brewing")
-        if keep:
+            state = "brewing" if brewed else ("warming" if warm else None)
+        if brewed:
             found.append([keep[0][0], keep[-1][1]])
     return found, state
 
