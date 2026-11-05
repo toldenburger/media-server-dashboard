@@ -30,13 +30,11 @@ export default function (kit) {
   const tray = kit.group(W / 2 + 0.02, 0.74, 0, C);
   kit.box(0.5, 0.025, 0.5, '#cfd3dc', 0.25, 0, 0, tray).rotation.z = -0.08;
   [-0.25, 0.25].forEach((z) => kit.box(0.5, 0.05, 0.02, '#cfd3dc', 0.25, 0.03, z, tray));
-  // scanner on top: frame, glass, a lid standing open at the back, and the sweeping light bar
+  // scanner on top: frame, glass, a lid lying shut over the back part (the front part is left free for the control panel), and the sweeping light bar
   kit.rbox(W + 0.02, 0.1, D + 0.02, 0.03, '#cfd3dc', 0, 1.03, 0, C);
   kit.box(W - 0.16, 0.006, D - 0.14, '#b9d4e6', 0, 1.083, -0.02, C).material = kit.mat('#b9d4e6', { emissive: '#7fb3d8', emissiveIntensity: 0.25 });
   const lidHinge = kit.group(0, 1.09, -D / 2, C);
-  lidHinge.rotation.x = -1.75;
-  kit.rbox(W, 0.06, D, 0.02, '#f4f5f8', 0, 0.03, D / 2, lidHinge);
-  kit.box(W - 0.1, 0.01, D - 0.08, '#e3e5eb', 0, -0.005, D / 2, lidHinge);
+  kit.rbox(W, 0.06, 0.56, 0.02, '#f4f5f8', 0, 0.03, 0.28, lidHinge);
   const scanBar = kit.box(W - 0.22, 0.012, 0.03, '#ffffff', 0, 1.09, 0, C);
   scanBar.material = kit.mat('#ffffff', { emissive: '#d8f0ff', emissiveIntensity: 0 });
   scanBar.castShadow = false; scanBar.visible = false;
