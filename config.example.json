@@ -26,7 +26,16 @@
       "water_heater": "water_heater.boiler",
       "price": "sensor.electricity_price",
       "price_forecast": "sensor.electricity_price_forecast",
-      "light_prefix": "light.living_room"
+      "light_prefix": "light.living_room",
+      "compressor": "sensor.heat_pump_compressor_frequency",
+      "heat_power": "sensor.heat_pump_heat_output_kw",
+      "solar": { "power": "sensor.solar_current_power", "lifetime": "sensor.solar_lifetime_energy", "today": "sensor.solar_energy_today" },
+      "heatpump": {
+        "electric_power": "sensor.heat_pump_electric_power", "cop": "sensor.heat_pump_cop_now", "cop_today": "sensor.heat_pump_cop_today",
+        "heat_today": "sensor.heat_pump_heat_today", "electric_today": "sensor.heat_pump_electric_today",
+        "outdoor": "sensor.outdoor_temperature", "leaving_water": "sensor.leaving_water_temperature",
+        "defrost": "binary_sensor.heat_pump_defrost", "hot_water": "binary_sensor.heat_pump_valve_hot_water", "fan": "sensor.heat_pump_fan_rpm", "error": "sensor.heat_pump_error"
+      }
     },
     "nextcloud": { "container": "nextcloud", "user": "your-nextcloud-user" },
     "freshrss": { "container": "freshrss", "user": "your-freshrss-user" },

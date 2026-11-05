@@ -5,11 +5,30 @@ Needs secrets/ha_token (a long-lived access token) and in config.json, for examp
                                 "price_forecast": "sensor.price_forecast", "light_prefix": "light.living_room"}}
 Every entity is optional; what is not set is left out. For a heat pump you can name "compressor" (a sensor above 0 while it runs) and/or
 "heat_power" (its heat output in kW); the radiator then glows while the pump really heats, instead of when the room is merely below its target.
+
+Two more optional blocks feed the garden props (office_props/garden.js):
+  "solar": {"power": "sensor.solar_current_power", "lifetime": "sensor.solar_lifetime_energy", "today": "sensor.solar_energy_today"}
+  "heatpump": {"electric_power": .., "cop": .., "cop_today": .., "heat_today": .., "electric_today": .., "outdoor": .., "leaving_water": ..,
+               "defrost": "binary_sensor..", "hot_water": "binary_sensor.. (on while it makes hot water)", "fan": .., "error": ..}
+(the heat pump block reuses "compressor" and "heat_power" from above). A solar sensor that is "unavailable" means the inverter is asleep.
 """
 from datetime import datetime
 
 NAME = "homeassistant"
 EVERY = 20
+seen_peak = {"w": 0.0}  # the most solar power seen since the server started, to scale the panels' glow
+UNITS = {"W": 1, "kW": 1000, "MW": 1e6, "Wh": 1, "kWh": 1000, "MWh": 1e6}
+
+
+def reading(states, entity, per=1):
+    """A sensor's number, converted to a base unit and then divided by `per` (e.g. watts to kW); None when missing or unavailable."""
+    s = states.get(entity or "")
+    if not s or s["state"] in ("unknown", "unavailable", ""):
+        return None
+    try:
+        return float(s["state"]) * UNITS.get(s["attributes"].get("unit_of_measurement"), 1) / per
+    except ValueError:
+        return None
 
 
 def poll(ctx):
@@ -41,6 +60,27 @@ def poll(ctx):
         now = datetime.now().astimezone().replace(minute=0, second=0, microsecond=0)
         ahead = [h for h in hourly if isinstance(h, dict) and h.get("p") is not None and datetime.fromisoformat(h["t"]) >= now]
         out["price"]["hourly"] = [{"t": h["t"], "p": h["p"]} for h in ahead[:24]]
+    solar = cfg.get("solar")
+    if solar:
+        watts = reading(states, solar.get("power"))
+        seen_peak["w"] = max(seen_peak["w"], watts or 0)
+        out["solar"] = {
+            "asleep": watts is None, "watts": watts or 0, "peak": max(3000.0, seen_peak["w"]),
+            "lifetime_kwh": reading(states, solar.get("lifetime"), 1000), "today_kwh": reading(states, solar.get("today"), 1000),
+        }
+    hp = cfg.get("heatpump")
+    if hp:
+        on = lambda key: (states.get(hp.get(key) or "") or {}).get("state") == "on"
+        err = states.get(hp.get("error") or "")
+        compressor = reading(states, cfg.get("compressor"))
+        out["heatpump"] = {
+            "running": (compressor or 0) > 0, "compressor": compressor, "heat_kw": reading(states, cfg.get("heat_power"), 1000),
+            "electric_w": reading(states, hp.get("electric_power")), "cop": reading(states, hp.get("cop")), "cop_today": reading(states, hp.get("cop_today")),
+            "heat_today_kwh": reading(states, hp.get("heat_today"), 1000), "electric_today_kwh": reading(states, hp.get("electric_today"), 1000),
+            "outdoor": reading(states, hp.get("outdoor")), "leaving_water": reading(states, hp.get("leaving_water")), "fan": reading(states, hp.get("fan")),
+            "defrost": on("defrost"), "hot_water": on("hot_water"),
+            "error": err["state"] if err and err["state"] not in ("Normal", "unknown", "unavailable", "-", "", "0") else None,
+        }
     prefix = cfg.get("light_prefix")
     if prefix:
         on = [s for e, s in states.items() if e.startswith(prefix) and s["state"] == "on"]

@@ -101,6 +101,22 @@ On the right edge of the beanbag corner a TV on a low cabinet and a game console
 streaming, to which device and for how long, and the console light pulses. Hover it for the paired devices and how often you streamed this week.
 It reads Sunshine's own log, read-only and without a login, so there is no worker for it: the room just lights up when it is in use.
 
+### The garden: solar panels and a heat pump (Home Assistant)
+
+![Solar panels, the tree with its bird feeder and the heat pump](docs/screenshots/garden.png)
+
+Next to the tree, on the same grass patch, two more things report what your house is doing right now:
+
+- **Solar panels**: a slanted ground-mounted array in front of the tree. The panels glow with the solar power at this moment (they go dark and the
+  sign says "asleep" when the inverter sleeps), and the little sign shows the power with a bar, and today's and the all-time production when your
+  inverter reports them. Made with a SolarEdge in mind, but any Home Assistant power sensor works.
+- **Heat pump**: an outdoor unit to the right of the tree. Its fan turns while the compressor runs (faster when it works harder), its light shows
+  what it is doing (green heating, blue idle, orange defrosting, red error), and steam rises when it works in the cold. The sign shows the **COP**
+  (heat delivered per unit of electricity, from your own sensors), the heat and electric power, and the temperatures; hover for today's totals. Two
+  lagged pipes run under the grass to the house. It says "making hot water" while the pump heats the tank instead of the house.
+
+Both come from Home Assistant sensors you name in `config.json` (see `config.example.json`); every one is optional.
+
 ### Headphones, Linkwarden and podcasts
 
 - **Headphones** (the music downloader): a **record crate** beside the record player, with a sleeve for every album that arrived lately (the newest

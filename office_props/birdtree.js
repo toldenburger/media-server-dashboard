@@ -17,8 +17,8 @@ export default function (kit) {
     }
   });
   grass.magFilter = THREE.NearestFilter; grass.minFilter = THREE.NearestFilter;
-  grass.wrapS = grass.wrapT = THREE.RepeatWrapping; grass.repeat.set(12, 14);
-  const gx = 17.0, gz = -6.2, GW = 9.2, GD = 10.4;
+  grass.wrapS = grass.wrapT = THREE.RepeatWrapping; grass.repeat.set(15, 19);
+  const gx = 18.3, gz = -4.4, GW = 11.8, GD = 14.0;
   kit.box(GW, 0.8, GD, '#8a6a4a', gx, -0.4, gz).castShadow = false;
   kit.plane(GW, GD, new THREE.MeshStandardMaterial({ map: grass, roughness: 1 }), gx, 0.003, gz, 0, -Math.PI / 2);
   kit.box(GW + 0.1, 0.08, GD + 0.1, '#7a5c3e', gx, -0.82, gz).castShadow = false;
