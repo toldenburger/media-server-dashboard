@@ -1,4 +1,4 @@
-// The rest of the garden: a slanted solar array in front of the tree and a heat pump to its right. Data from sources/homeassistant.py.
+// The rest of the garden: a slanted solar array in front of the tree and a heat pump in the front corner, in line with the panels. Data from sources/homeassistant.py.
 //  - the panels glow with the solar power now (they sleep when the inverter does), the sign by the array has the numbers
 //  - the heat pump's fan turns while the compressor runs, its light shows what it is doing, puffs rise when it works in the cold,
 //    and its sign shows the COP (heat out per electricity in). Hover either for the details, double-click opens Home Assistant.
@@ -62,7 +62,7 @@ export default function (kit) {
     if (d.lifetime_kwh) bits.push(`total ${Math.round(d.lifetime_kwh / 1000 * 10) / 10} MWh`);
     g.fillText(bits.join(' · ') || 'SolarEdge', 22, 224);
   });
-  const solarSign = sign(13.35, 2.6, 0.55, 1.0, 0.5, solarTex);
+  const solarSign = sign(19.2, 0.1, 0.55, 1.0, 0.5, solarTex);
   const solarTip = () => {
     const s = ha && ha.solar;
     if (!s) return 'Solar panels';
@@ -72,8 +72,8 @@ export default function (kit) {
   panels.forEach((p) => wrapTip(p.face, solarTip));
   wrapTip(solarSign.m, solarTip);
 
-  // ---------- the heat pump, to the right of the tree ----------
-  const HX = 22.4, HZ = -5.0;
+  // ---------- the heat pump, in the front-right corner of the garden, in line with the panels ----------
+  const HX = 22.9, HZ = 1.2;
   const hp = kit.group(HX, 0, HZ);
   hp.scale.setScalar(1.25);
   kit.box(1.7, 0.06, 0.9, '#a9adb7', 0, 0.03, 0, hp);  // concrete pad
@@ -90,9 +90,12 @@ export default function (kit) {
   kit.plane(0.4, 0.1, new THREE.MeshStandardMaterial({ map: brand }), 0.32, 0.82, 0.213, 0, 0, hp);
   const led = kit.ball(0.03, kit.mat('#4ade80', { emissive: '#4ade80', emissiveIntensity: 1 }), 0.45, 0.88, 0.215, hp);
   led.castShadow = false;
-  // two lagged pipes running under the grass to the house
-  kit.box(9.4, 0.07, 0.08, '#d85a4a', -5.6, 0.04, 0.2, hp);
-  kit.box(9.4, 0.07, 0.08, '#4a8ad8', -5.6, 0.04, 0.34, hp);
+  // two lagged pipes: out of the front of the unit, then along the front edge of the garden to where it meets the office, where they stop
+  const EDGE_X = 12.4, PZ = [2.2, 2.34];
+  [['#d85a4a', PZ[0], HX + 0.2], ['#4a8ad8', PZ[1], HX - 0.05]].forEach(([c, z, x]) => {
+    kit.box(x - EDGE_X, 0.07, 0.08, c, (x + EDGE_X) / 2, 0.04, z);  // along the edge
+    kit.box(0.08, 0.07, z - (HZ + 0.6), c, x, 0.04, (z + HZ + 0.6) / 2);  // from the unit to the edge
+  });
 
   const puffTex = kit.canvasTexture(64, 64, (g) => { const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30); gr.addColorStop(0, 'rgba(255,255,255,0.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
   const puffs = [0, 1, 2, 3].map((i) => {
@@ -114,7 +117,7 @@ export default function (kit) {
     g.fillText(d.running ? `${d.heat_kw !== null ? num(d.heat_kw, 1) + ' kW heat' : ''}${d.electric_w ? ' for ' + Math.round(d.electric_w) + ' W' : ''}` : `${d.running ? '' : 'today '}${num(d.cop_today)} on average`, 22, 214);
     g.fillText(`outside ${num(d.outdoor, 0)}°C · water ${num(d.leaving_water, 0)}°C`, 22, 244);
   });
-  const hpSign = sign(20.5, -3.2, 0.55, 1.0, 0.5, hpTex);
+  const hpSign = sign(21.3, 2.0, 0.55, 1.0, 0.5, hpTex);
   const hpTip = () => {
     const d = ha && ha.heatpump;
     if (!d) return 'Heat pump';

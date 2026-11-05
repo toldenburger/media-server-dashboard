@@ -110,10 +110,10 @@ Next to the tree, on the same grass patch, two more things report what your hous
 - **Solar panels**: a slanted ground-mounted array in front of the tree. The panels glow with the solar power at this moment (they go dark and the
   sign says "asleep" when the inverter sleeps), and the little sign shows the power with a bar, and today's and the all-time production when your
   inverter reports them. Made with a SolarEdge in mind, but any Home Assistant power sensor works.
-- **Heat pump**: an outdoor unit to the right of the tree. Its fan turns while the compressor runs (faster when it works harder), its light shows
+- **Heat pump**: an outdoor unit in the front corner of the garden, in line with the panels. Its fan turns while the compressor runs (faster when it works harder), its light shows
   what it is doing (green heating, blue idle, orange defrosting, red error), and steam rises when it works in the cold. The sign shows the **COP**
   (heat delivered per unit of electricity, from your own sensors), the heat and electric power, and the temperatures; hover for today's totals. Two
-  lagged pipes run under the grass to the house. It says "making hot water" while the pump heats the tank instead of the house.
+  lagged pipes run along the front edge of the garden to the office. It says "making hot water" while the pump heats the tank instead of the house.
 
 Both come from Home Assistant sensors you name in `config.json` (see `config.example.json`); every one is optional.
 
